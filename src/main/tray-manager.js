@@ -1,7 +1,7 @@
 /**
  * Deps: electron, path
  * Used By: index.js
- * Last Updated: 2024-03-04
+ * Last Updated: 2026-03-05
  *
  * 菜单栏管理器 - 管理系统托盘图标和菜单
  */
@@ -44,8 +44,7 @@ class TrayManager extends EventEmitter {
     }
 
     this.tray = new Tray(icon);
-    this.tray.setToolTip('Kory Whisper - 长按右 ⌘ 语音输入');
-
+    this.applyStateVisuals();
     this.updateContextMenu();
 
     // 点击图标显示设置
@@ -108,34 +107,32 @@ class TrayManager extends EventEmitter {
 
   setRecordingState(isRecording) {
     this.currentState = isRecording ? 'recording' : 'idle';
+    this.applyStateVisuals();
     this.updateContextMenu();
-
-    // 可以添加视觉反馈，比如改变图标颜色
-    if (isRecording) {
-      this.tray.setToolTip('Kory Whisper - 录音中...');
-    } else {
-      this.tray.setToolTip('Kory Whisper - 长按右 ⌘ 语音输入');
-    }
   }
 
   showProcessingState() {
     this.currentState = 'processing';
+    this.applyStateVisuals();
     this.updateContextMenu();
   }
 
   showSuccessState() {
     this.currentState = 'success';
+    this.applyStateVisuals();
     this.updateContextMenu();
 
     // 2秒后恢复
     setTimeout(() => {
       this.currentState = 'idle';
+      this.applyStateVisuals();
       this.updateContextMenu();
     }, 2000);
   }
 
   showErrorState(message) {
     this.currentState = 'error';
+    this.applyStateVisuals();
     this.updateContextMenu();
 
     console.error('[Tray] Error:', message);
@@ -143,8 +140,25 @@ class TrayManager extends EventEmitter {
     // 3秒后恢复
     setTimeout(() => {
       this.currentState = 'idle';
+      this.applyStateVisuals();
       this.updateContextMenu();
     }, 3000);
+  }
+
+  applyStateVisuals() {
+    if (!this.tray) return;
+
+    const visuals = {
+      idle: { title: '', tooltip: 'Kory Whisper - 长按右 ⌘ 语音输入' },
+      recording: { title: '●', tooltip: 'Kory Whisper - 录音中...' },
+      processing: { title: '…', tooltip: 'Kory Whisper - 识别中...' },
+      success: { title: '✓', tooltip: 'Kory Whisper - 输入完成' },
+      error: { title: '!', tooltip: 'Kory Whisper - 出错了' }
+    };
+
+    const stateVisual = visuals[this.currentState] || visuals.idle;
+    this.tray.setTitle(stateVisual.title);
+    this.tray.setToolTip(stateVisual.tooltip);
   }
 
   openSettings() {

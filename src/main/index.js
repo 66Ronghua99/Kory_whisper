@@ -1,7 +1,7 @@
 /**
  * Deps: electron, node-global-key-listener
  * Used By: main process entry
- * Last Updated: 2024-03-04
+ * Last Updated: 2026-03-05
  *
  * Kory Whisper - 主进程入口
  * 负责初始化应用、管理生命周期、协调各模块
@@ -90,32 +90,37 @@ class KoryWhisperApp {
     this.trayManager.init();
     logger.info('[Main] Tray manager initialized');
 
-    // 延迟初始化快捷键，避免启动时卡死
-    // 快捷键需要辅助功能权限，如果没权限会提示用户
-    logger.info('[Main] Will initialize shortcut manager in 1s...');
-    setTimeout(() => {
-      this.initShortcutManager(config);
-    }, 1000);
-
     // 设置事件监听
     this.setupEventHandlers();
 
     // 检查权限
-    await this.checkPermissions();
+    const permissionState = await this.checkPermissions();
+
+    // 延迟初始化快捷键，避免启动时卡死
+    logger.info('[Main] Will initialize shortcut manager in 1s...');
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await this.initShortcutManager(config, permissionState);
 
     logger.info('[Main] Initialization complete');
     logger.info('[Main] ==================== Kory Whisper Ready ====================');
   }
 
-  initShortcutManager(config) {
+  async initShortcutManager(config, permissionState = {}) {
     logger.info('[Main] Initializing shortcut manager...');
     logger.info('[Main] Shortcut key:', config.shortcut?.key || 'RIGHT COMMAND');
     try {
+      if (this.shortcutManager) {
+        this.shortcutManager.destroy();
+        this.shortcutManager = null;
+      }
+
       this.shortcutManager = new ShortcutManager({
         key: config.shortcut?.key || 'RIGHT COMMAND',
-        longPressDuration: config.shortcut?.longPressDuration || 500
+        longPressDuration: config.shortcut?.longPressDuration || 500,
+        onInfo: (message) => logger.info('[ShortcutServer]', message),
+        onError: (code) => logger.error('[ShortcutServer] exited with code:', code)
       });
-      this.shortcutManager.init();
+      await this.shortcutManager.init();
 
       // 设置快捷键事件监听
       this.setupShortcutEventHandlers();
@@ -123,11 +128,14 @@ class KoryWhisperApp {
       logger.info('[Main] Shortcut manager initialized successfully');
     } catch (error) {
       logger.error('[Main] Failed to initialize shortcut manager:', error);
-      dialog.showMessageBox({
+      const missingAccessibility = permissionState.accessibilityEnabled === false;
+      await dialog.showMessageBox({
         type: 'warning',
         title: '快捷键初始化失败',
         message: '无法初始化全局快捷键',
-        detail: '请检查辅助功能权限是否已授予。\n' + error.message
+        detail: missingAccessibility
+          ? '当前未检测到辅助功能权限。请在系统设置中同时确认“辅助功能”和“输入监控”已授权，并重启应用。\n' + error.message
+          : '请检查系统设置中的“辅助功能 / 输入监控”权限，并重启应用。\n' + error.message
       });
     }
   }
@@ -143,15 +151,16 @@ class KoryWhisperApp {
       try {
         await this.audioRecorder.start();
       } catch (error) {
-        console.error('[Main] Failed to start recording:', error);
+        logger.error('[Main] Failed to start recording:', error);
         this.isRecording = false;
         this.trayManager.setRecordingState(false);
+        this.trayManager.showErrorState('录音启动失败: ' + error.message);
       }
     });
 
     // 长按结束 - 停止录音并开始识别
     this.shortcutManager.on('longPressEnd', async () => {
-      console.log('[Main] Long press ended - processing...');
+      logger.info('[Main] Long press ended - processing...');
       if (!this.isRecording) return;
 
       this.isRecording = false;
@@ -161,11 +170,11 @@ class KoryWhisperApp {
       try {
         // 停止录音
         const audioPath = await this.audioRecorder.stop();
-        console.log('[Main] Audio saved to:', audioPath);
+        logger.info('[Main] Audio saved to:', audioPath);
 
         // Whisper 识别
         const text = await this.whisperEngine.transcribe(audioPath);
-        console.log('[Main] Transcribed:', text);
+        logger.info('[Main] Transcribed:', text);
 
         if (text && text.trim()) {
           // 模拟键盘输入
@@ -175,7 +184,7 @@ class KoryWhisperApp {
           this.trayManager.showErrorState('未识别到语音');
         }
       } catch (error) {
-        console.error('[Main] Processing error:', error);
+        logger.error('[Main] Processing error:', error);
         this.trayManager.showErrorState(error.message);
       }
     });
@@ -288,45 +297,58 @@ class KoryWhisperApp {
 
   async checkPermissions() {
     const { systemPreferences } = require('electron');
+    const microphoneGranted = await this.ensureMicrophonePermission(systemPreferences);
+    const accessibilityEnabled = await this.ensureAccessibilityPermission(systemPreferences);
+    return { microphoneGranted, accessibilityEnabled };
+  }
 
-    // 1. 检查麦克风权限
+  async ensureMicrophonePermission(systemPreferences) {
     const micStatus = systemPreferences.getMediaAccessStatus('microphone');
     logger.info('[Main] Microphone permission status:', micStatus);
+    if (micStatus === 'granted') return true;
 
-    if (micStatus !== 'granted') {
-      logger.info('[Main] Requesting microphone permission...');
-      // 主动请求麦克风权限
-      const granted = await systemPreferences.askForMediaAccess('microphone');
-      if (!granted) {
-        await dialog.showMessageBox({
-          type: 'warning',
-          buttons: ['去设置', '稍后'],
-          defaultId: 0,
-          title: '需要麦克风权限',
-          message: 'Kory Whisper 需要麦克风权限来录制语音',
-          detail: '请点击"去设置"打开系统偏好设置，在"麦克风"中勾选 Kory Whisper'
-        });
-      }
+    logger.info('[Main] Requesting microphone permission...');
+    const granted = await systemPreferences.askForMediaAccess('microphone');
+    if (granted) return true;
+
+    const result = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['去设置', '稍后'],
+      defaultId: 0,
+      title: '需要麦克风权限',
+      message: 'Kory Whisper 需要麦克风权限来录制语音',
+      detail: '请点击"去设置"打开系统偏好设置，在"麦克风"中勾选 Kory Whisper'
+    });
+
+    if (result.response === 0) {
+      systemPreferences.openSystemPreferences('security', 'Privacy_Microphone');
     }
+    return false;
+  }
 
-    // 2. 检查辅助功能权限
+  async ensureAccessibilityPermission(systemPreferences) {
     const accessibilityEnabled = systemPreferences.isTrustedAccessibilityClient(false);
+    if (accessibilityEnabled) return true;
 
-    if (!accessibilityEnabled) {
-      logger.warn('[Main] Accessibility permission not granted');
-      const result = await dialog.showMessageBox({
-        type: 'warning',
-        buttons: ['去设置', '稍后'],
-        defaultId: 0,
-        title: '需要辅助功能权限',
-        message: 'Kory Whisper 需要辅助功能权限来模拟键盘输入',
-        detail: '请点击"去设置"打开系统偏好设置，在"辅助功能"中勾选 Kory Whisper'
-      });
+    logger.warn('[Main] Accessibility permission not granted');
+    systemPreferences.isTrustedAccessibilityClient(true);
 
-      if (result.response === 0) {
-        systemPreferences.openSystemPreferences('security', 'Privacy_Accessibility');
-      }
+    const result = await dialog.showMessageBox({
+      type: 'warning',
+      buttons: ['辅助功能设置', '输入监控设置', '稍后'],
+      defaultId: 0,
+      cancelId: 2,
+      title: '需要辅助功能权限',
+      message: 'Kory Whisper 需要权限来监听按键并输入文本',
+      detail: '请在系统设置中确认 Kory Whisper 已在“辅助功能”和“输入监控”中授权，修改后请重启应用。'
+    });
+
+    if (result.response === 0) {
+      systemPreferences.openSystemPreferences('security', 'Privacy_Accessibility');
+    } else if (result.response === 1) {
+      systemPreferences.openSystemPreferences('security', 'Privacy_ListenEvent');
     }
+    return false;
   }
 
   openVocabEditor() {

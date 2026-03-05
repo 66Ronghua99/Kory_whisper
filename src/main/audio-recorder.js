@@ -1,7 +1,7 @@
 /**
  * Deps: child_process, fs, path, os
  * Used By: index.js
- * Last Updated: 2024-03-05
+ * Last Updated: 2026-03-05
  *
  * 音频录制器 - 使用 sox 直接录制麦克风
  */
@@ -17,58 +17,137 @@ class AudioRecorder {
     this.channels = options.channels || 1;
     this.device = options.device || null;
     this.soxProcess = null;
-    this.outputPath = path.join(os.tmpdir(), `kory-whisper-${Date.now()}.wav`);
+    this.outputPath = null;
+    this.recBinary = null;
+  }
+
+  buildFinderSafePath() {
+    const defaults = [
+      '/opt/homebrew/bin',
+      '/usr/local/bin',
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin'
+    ];
+    const pathParts = String(process.env.PATH || '').split(':').filter(Boolean);
+    return [...new Set([...pathParts, ...defaults])].join(':');
+  }
+
+  findInPath(binaryName, pathValue) {
+    const pathParts = String(pathValue || '').split(':').filter(Boolean);
+    for (const dir of pathParts) {
+      const fullPath = path.join(dir, binaryName);
+      if (fs.existsSync(fullPath)) {
+        return fullPath;
+      }
+    }
+    return null;
+  }
+
+  resolveRecBinary() {
+    if (this.recBinary && fs.existsSync(this.recBinary)) {
+      return this.recBinary;
+    }
+
+    const finderSafePath = this.buildFinderSafePath();
+    const fromPath = this.findInPath('rec', finderSafePath);
+    if (fromPath) {
+      this.recBinary = fromPath;
+      return fromPath;
+    }
+
+    const candidates = ['/opt/homebrew/bin/rec', '/usr/local/bin/rec', '/usr/bin/rec'];
+    const directMatch = candidates.find((candidate) => fs.existsSync(candidate));
+    if (directMatch) {
+      this.recBinary = directMatch;
+      return directMatch;
+    }
+
+    return null;
+  }
+
+  buildRecArgs() {
+    const args = [
+      '-r', this.sampleRate.toString(),
+      '-c', this.channels.toString(),
+      '-b', '16',
+      '-e', 'signed-integer',
+      this.outputPath
+    ];
+
+    if (this.device) {
+      args.unshift('-d', this.device);
+    }
+
+    return args;
   }
 
   async start() {
+    if (this.soxProcess) {
+      throw new Error('Recording already in progress');
+    }
+
+    this.outputPath = path.join(os.tmpdir(), `kory-whisper-${Date.now()}.wav`);
+    const recBinary = this.resolveRecBinary();
+    if (!recBinary) {
+      throw new Error('未找到 rec 命令。请安装 sox（brew install sox）后重试。');
+    }
+
     console.log('[Audio] Starting recording with sox...');
+    console.log('[Audio] rec binary:', recBinary);
     console.log('[Audio] Output path:', this.outputPath);
 
     return new Promise((resolve, reject) => {
       try {
-        // 使用 sox 直接录制，确保正确的 WAV 文件头
-        // rec -r 16000 -c 1 -b 16 -e signed-integer output.wav
-        const args = [
-          '-r', this.sampleRate.toString(),
-          '-c', this.channels.toString(),
-          '-b', '16',
-          '-e', 'signed-integer',
-          this.outputPath
-        ];
+        const args = this.buildRecArgs();
+        const env = {
+          ...process.env,
+          PATH: this.buildFinderSafePath()
+        };
+        let settled = false;
+        let stderrBuffer = '';
 
-        // 如果指定了设备
-        if (this.device) {
-          args.unshift('-d', this.device);
-        }
+        console.log('[Audio] Command:', recBinary, args.join(' '));
 
-        console.log('[Audio] Command: rec', args.join(' '));
-
-        this.soxProcess = spawn('rec', args, {
-          stdio: ['ignore', 'pipe', 'pipe']
+        this.soxProcess = spawn(recBinary, args, {
+          stdio: ['ignore', 'ignore', 'pipe'],
+          env
         });
 
         this.soxProcess.on('error', (error) => {
+          this.soxProcess = null;
           console.error('[Audio] Sox process error:', error);
-          reject(error);
+          if (settled) return;
+          settled = true;
+          const errorMessage = error.code === 'ENOENT'
+            ? '未找到 rec 命令，请确认已安装 sox。'
+            : `启动录音失败: ${error.message}`;
+          reject(new Error(errorMessage));
         });
 
         this.soxProcess.stderr.on('data', (data) => {
-          // sox 会把信息输出到 stderr，忽略非错误信息
-          const msg = data.toString();
+          const msg = data.toString().trim();
+          if (!msg) return;
+          stderrBuffer += (stderrBuffer ? '\n' : '') + msg;
           if (msg.toLowerCase().includes('error') || msg.toLowerCase().includes('fail')) {
             console.error('[Audio] Sox stderr:', msg);
           }
         });
 
-        // 给一点时间确保开始录制
         setTimeout(() => {
-          if (this.soxProcess && this.soxProcess.pid) {
+          if (settled) return;
+          if (this.soxProcess && this.soxProcess.pid && !this.soxProcess.killed) {
+            settled = true;
             console.log('[Audio] Recording started with PID:', this.soxProcess.pid);
             resolve();
           } else {
-            reject(new Error('Failed to start sox process'));
+            settled = true;
+            this.soxProcess = null;
+            const details = stderrBuffer ? ` (${stderrBuffer})` : '';
+            reject(new Error(`Failed to start sox process${details}`));
           }
-        }, 200);
+        }, 250);
 
       } catch (error) {
         console.error('[Audio] Failed to start recording:', error);
@@ -86,13 +165,15 @@ class AudioRecorder {
         return;
       }
 
+      const soxProcess = this.soxProcess;
+      this.soxProcess = null;
+
       // 发送 SIGTERM 信号停止录制
-      this.soxProcess.kill('SIGTERM');
+      soxProcess.kill('SIGTERM');
 
       // 等待进程退出
-      this.soxProcess.on('close', (code) => {
+      soxProcess.on('close', (code) => {
         console.log('[Audio] Sox process exited with code:', code);
-        this.soxProcess = null;
 
         // 验证文件是否存在
         if (fs.existsSync(this.outputPath)) {
@@ -106,9 +187,9 @@ class AudioRecorder {
 
       // 超时处理
       setTimeout(() => {
-        if (this.soxProcess) {
+        if (!soxProcess.killed) {
           console.warn('[Audio] Force killing sox process...');
-          this.soxProcess.kill('SIGKILL');
+          soxProcess.kill('SIGKILL');
         }
       }, 2000);
     });

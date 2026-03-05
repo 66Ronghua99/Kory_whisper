@@ -61,3 +61,33 @@ macOS 需要以下权限：
 2. 使用 `spawn` 启动 sox 进程录制
 3. `rec -r 16000 -c 1 -b 16 -e signed-integer output.wav`
 **验证**: 录音 2.6 秒，识别耗时 284ms，结果正确
+
+### 2026-03-05 Finder 双击启动后无法触发快捷键
+**问题**: 终端运行 `.app/Contents/MacOS/Kory Whisper` 可监听按键，但 Finder 双击后无法触发长按录音。
+
+**根因**:
+1. 权限链路不完整：只检查了辅助功能，未明确引导输入监控（Input Monitoring），且未触发系统原生授权弹窗。
+2. 监听初始化存在“假成功”：`node-global-key-listener.addListener()` 是异步的，之前未 `await`，初始化日志可能显示成功但监听器实际未启动。
+3. Finder 启动环境变量更精简，`PATH` 可能不包含 Homebrew 路径；`spawn('rec')` 会因找不到 sox 的 `rec` 可执行文件而失败。
+
+**修复方案**:
+1. 将快捷键初始化改为 `async` 并 `await addListener()`，失败时向上抛错。
+2. 为 MacKeyServer 增加 `onError/onInfo` 日志，定位子进程失败原因。
+3. 启动时调用 `isTrustedAccessibilityClient(true)` 触发系统授权提示，并在 UI 中同时引导“辅助功能 + 输入监控”。
+4. 权限检查完成后再初始化快捷键，降低竞态问题。
+5. 录音模块增加 `rec` 路径自动探测（`/opt/homebrew/bin/rec` 等），并将录音启动失败写入日志与托盘错误提示。
+
+**补充建议**:
+- 正式发布前完成 Developer ID 签名与公证，避免每次重打包导致 TCC 记录不稳定。
+
+### 2026-03-05 长按后无顶部可见提示（但可输入）
+**现象**: 长按快捷键后，日志有 `Long press started`，最终可输入文本，但菜单栏没有明显“正在监听/录音”提示。
+
+**原因**:
+1. 应用此前依赖系统级麦克风/权限提示，这类提示不是每次长按都会出现。
+2. Tray 只更新了 tooltip 和菜单项状态，未设置菜单栏标题指示。
+
+**解决方案**:
+1. 在 `TrayManager` 增加统一状态视觉函数 `applyStateVisuals()`。
+2. 根据状态设置菜单栏标题：`recording=●`、`processing=…`、`success=✓`、`error=!`、`idle=空`。
+3. 在 `setRecordingState/showProcessingState/showSuccessState/showErrorState` 中统一调用，确保状态切换可见且一致。
