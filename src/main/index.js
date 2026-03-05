@@ -46,6 +46,12 @@ class KoryWhisperApp {
     await app.whenReady();
     logger.info('[Main] App is ready');
 
+    // 隐藏 Dock 图标（仅菜单栏应用）
+    if (process.platform === 'darwin') {
+      app.dock.hide();
+      logger.info('[Main] Dock icon hidden');
+    }
+
     // 获取正确的模型目录（打包后路径不同）
     const modelsDir = this.getModelsDir();
     logger.info('[Main] Models directory:', modelsDir);
