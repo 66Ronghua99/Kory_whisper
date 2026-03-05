@@ -1,0 +1,37 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Node.js
+node_modules/
+
+# Electron build output
+dist/
+*.dmg
+
+# Whisper models (large files)
+models/*.bin
+models/*.pt
+
+# Temporary files
+*.wav
+*.txt
+*.log
+tmp/
+temp/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
