@@ -1,13 +1,3 @@
-# Checklist: stability_postprocess
-
-- [x] 支持模型切换：`base` / `small`
-- [x] 启动模型检查下载逻辑改为按配置模型执行
-- [x] 运行时保存设置后支持热切换模型
-- [x] 词表后处理支持替换映射（replacements）
-- [x] 中文断句/标点轻量规则落地并可开关
-- [x] 可选轻量 LLM 后处理接入（默认关闭 + 超时回退）
-- [x] 设置页新增模型与后处理开关
-- [x] 旧配置向后兼容（默认值回填）
-- [x] 文档更新（README / Progress / Memory）
-- [ ] 语音长句与术语命中人工回归
-- [x] 语法检查与打包目录版验证通过
+> [!NOTE]
+> **已归档** | 归档日期：2026-03-05
+> 本文档已移至 [../docs/checklist_stability_postprocess.md](../docs/checklist_stability_postprocess.md)，请在该位置查看。
