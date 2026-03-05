@@ -18,6 +18,7 @@ dist/
 # Whisper models (large files)
 models/*.bin
 models/*.pt
+models/**/*.gguf
 
 # Temporary files
 *.wav
