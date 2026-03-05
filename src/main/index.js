@@ -11,9 +11,8 @@ const { app, ipcMain, dialog } = require('electron');
 const path = require('path');
 const logger = require('./logger');
 const ShortcutManager = require('./shortcut-manager');
-const AudioRecorder = require('./audio-recorder');
+const platform = require('./platform');
 const WhisperEngine = require('./whisper-engine');
-const InputSimulator = require('./input-simulator');
 const TrayManager = require('./tray-manager');
 const ConfigManager = require('./config-manager');
 const ModelDownloader = require('./model-downloader');
@@ -78,7 +77,7 @@ class KoryWhisperApp {
     const modelPath = path.join(this.getModelsDir(), modelName);
 
     // 初始化各模块
-    this.audioRecorder = new AudioRecorder({
+    this.audioRecorder = platform.getAudioRecorder({
       sampleRate: 16000,
       channels: 1
     });
@@ -94,7 +93,9 @@ class KoryWhisperApp {
       whisperBin: this.getWhisperBinPath()
     });
 
-    this.inputSimulator = new InputSimulator();
+    this.inputSimulator = platform.getInputSimulator({
+      appendSpace: config.input?.appendSpace !== false
+    });
 
     // 初始化托盘（在快捷键之前，确保有 UI 反馈）
     logger.info('[Main] Initializing tray manager...');
