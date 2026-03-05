@@ -9,7 +9,12 @@
     "build": "electron-builder",
     "postinstall": "electron-builder install-app-deps"
   },
-  "keywords": ["whisper", "voice", "input", "macos"],
+  "keywords": [
+    "whisper",
+    "voice",
+    "input",
+    "macos"
+  ],
   "author": "Kory",
   "license": "MIT",
   "devDependencies": {
@@ -18,7 +23,8 @@
   },
   "dependencies": {
     "node-global-key-listener": "^0.3.0",
-    "node-record-lpcm16": "^1.0.1"
+    "node-record-lpcm16": "^1.0.1",
+    "opencc-js": "^1.0.5"
   },
   "build": {
     "appId": "com.kory.whisper",
@@ -37,12 +43,16 @@
       {
         "from": "bin",
         "to": "bin",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "models",
         "to": "models",
-        "filter": ["*.bin"]
+        "filter": [
+          "*.bin"
+        ]
       }
     ],
     "mac": {
@@ -50,7 +60,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "entitlements": "build/entitlements.mac.plist",

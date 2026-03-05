@@ -53,21 +53,23 @@ class KoryWhisperApp {
     // 重新初始化 ModelDownloader 使用正确的路径
     this.modelDownloader = new ModelDownloader({ modelsDir });
 
+    // 初始化配置
+    await this.configManager.load();
+    const config = this.configManager.get();
+    const modelKey = this.resolveModelKey(config.whisper?.model);
+    const modelName = this.getModelFilename(modelKey);
+
     // 检查并下载模型
-    logger.info('[Main] Checking model...');
-    const modelReady = await this.checkAndDownloadModel();
+    logger.info('[Main] Checking model:', modelName);
+    const modelReady = await this.checkAndDownloadModel(modelName);
     if (!modelReady) {
       logger.error('[Main] Model not ready, exiting...');
       return;
     }
-    logger.info('[Main] Model is ready');
-
-    // 初始化配置
-    await this.configManager.load();
-    const config = this.configManager.get();
+    logger.info('[Main] Model is ready:', modelName);
 
     // 获取正确的模型路径（打包后路径不同）
-    const modelPath = path.join(this.getModelsDir(), 'ggml-base.bin');
+    const modelPath = path.join(this.getModelsDir(), modelName);
 
     // 初始化各模块
     this.audioRecorder = new AudioRecorder({
@@ -79,6 +81,10 @@ class KoryWhisperApp {
       modelPath: modelPath,
       vocabPath: config.vocabulary?.path,
       language: config.whisper?.language || 'zh',
+      prompt: config.whisper?.prompt || '',
+      outputScript: config.whisper?.outputScript || 'simplified',
+      enablePunctuation: config.whisper?.enablePunctuation !== false,
+      llm: config.whisper?.llm || {},
       whisperBin: this.getWhisperBinPath()
     });
 
@@ -205,10 +211,32 @@ class KoryWhisperApp {
       : path.join(__dirname, '../../models');
   }
 
-  async checkAndDownloadModel() {
-    const modelCheck = await this.modelDownloader.checkModel('ggml-base.bin');
+  resolveModelKey(model) {
+    return model === 'small' ? 'small' : 'base';
+  }
 
-    if (modelCheck.exists && modelCheck.size > 140000000) {
+  getModelFilename(modelKey) {
+    const mapping = {
+      base: 'ggml-base.bin',
+      small: 'ggml-small.bin'
+    };
+    return mapping[this.resolveModelKey(modelKey)];
+  }
+
+  getModelMinBytes(modelName) {
+    const minBytes = {
+      'ggml-base.bin': 100 * 1024 * 1024,
+      'ggml-small.bin': 300 * 1024 * 1024
+    };
+    return minBytes[modelName] || 50 * 1024 * 1024;
+  }
+
+  async checkAndDownloadModel(modelName = 'ggml-base.bin') {
+    const modelCheck = await this.modelDownloader.checkModel(modelName);
+    const minSize = this.getModelMinBytes(modelName);
+    const modelInfo = this.modelDownloader.getModelInfo(modelName);
+
+    if (modelCheck.exists && modelCheck.size > minSize) {
       console.log('[Main] Model already exists:', modelCheck.path);
       return true;
     }
@@ -220,7 +248,7 @@ class KoryWhisperApp {
       defaultId: 0,
       title: '需要下载语音模型',
       message: '首次使用需要下载 Whisper 语音模型',
-      detail: '模型大小: 约 75MB (ggml-base)\n下载后下次启动无需再次下载。'
+      detail: `模型: ${modelName}\n模型大小: 约 ${modelInfo.size}\n说明: ${modelInfo.desc}\n下载后下次启动无需再次下载。`
     });
 
     if (result.response !== 0) {
@@ -246,7 +274,7 @@ class KoryWhisperApp {
       <body style="font-family: -apple-system; text-align: center; padding: 30px;">
         <h3>正在下载语音模型...</h3>
         <p id="progress">0%</p>
-        <p style="font-size: 12px; color: #666;">模型大小: 约 75MB</p>
+        <p style="font-size: 12px; color: #666;">模型: ${modelName} (${modelInfo.size})</p>
       </body>
       <script>
         const { ipcRenderer } = require('electron');
@@ -258,7 +286,7 @@ class KoryWhisperApp {
     `);
 
     try {
-      await this.modelDownloader.downloadModel('ggml-base.bin', (progress) => {
+      await this.modelDownloader.downloadModel(modelName, (progress) => {
         progressWin.webContents.send('progress', progress);
       });
 
@@ -276,7 +304,10 @@ class KoryWhisperApp {
 
     // IPC 通信
     ipcMain.handle('get-config', () => this.configManager.get());
-    ipcMain.handle('save-config', (event, config) => this.configManager.save(config));
+    ipcMain.handle('save-config', async (event, config) => {
+      await this.applyRuntimeConfig(config);
+      await this.configManager.save(config);
+    });
     ipcMain.handle('open-vocab-editor', () => this.openVocabEditor());
     ipcMain.handle('get-logs', async () => {
       const loggerModule = require('./logger');
@@ -349,6 +380,42 @@ class KoryWhisperApp {
       systemPreferences.openSystemPreferences('security', 'Privacy_ListenEvent');
     }
     return false;
+  }
+
+  async applyRuntimeConfig(config) {
+    const modelKey = this.resolveModelKey(config.whisper?.model);
+    const modelName = this.getModelFilename(modelKey);
+    const modelPath = path.join(this.getModelsDir(), modelName);
+
+    if (config.whisper) {
+      config.whisper.model = modelKey;
+    }
+
+    if (this.whisperEngine) {
+      let nextModelPath = this.whisperEngine.modelPath;
+      if (this.whisperEngine.modelPath !== modelPath) {
+        logger.info('[Main] Switching model to:', modelName);
+        const modelReady = await this.checkAndDownloadModel(modelName);
+        if (!modelReady) {
+          throw new Error('模型下载被取消，未切换模型');
+        }
+        nextModelPath = modelPath;
+      }
+
+      this.whisperEngine.updateRuntimeOptions({
+        modelPath: nextModelPath,
+        vocabPath: config.vocabulary?.path || this.whisperEngine.vocabPath,
+        language: config.whisper?.language || this.whisperEngine.language,
+        prompt: config.whisper?.prompt || '',
+        outputScript: config.whisper?.outputScript || 'simplified',
+        enablePunctuation: config.whisper?.enablePunctuation !== false,
+        llm: config.whisper?.llm || {}
+      });
+    }
+
+    if (this.inputSimulator) {
+      this.inputSimulator.appendSpace = config.input?.appendSpace !== false;
+    }
   }
 
   openVocabEditor() {

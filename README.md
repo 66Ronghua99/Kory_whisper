@@ -7,6 +7,7 @@
 - 🎙️ **本地语音识别** - 使用 Whisper 模型，无需联网
 - 🔑 **长按快捷键** - 右 Command (⌘) 长按触发（可自定义）
 - 📝 **自定义词表** - 增强专业术语识别准确度
+- 🤖 **可选轻量 LLM 后处理** - 联网提升断句/术语稳定性（默认关闭）
 - 🖥️ **系统级输入** - 在任何应用中都能使用
 - 🔒 **隐私保护** - 语音数据本地处理，不上传
 
@@ -75,7 +76,17 @@ npm start
   },
   "whisper": {
     "model": "base",
-    "language": "zh"
+    "language": "zh",
+    "outputScript": "simplified",
+    "enablePunctuation": true,
+    "llm": {
+      "enabled": false,
+      "model": "gpt-4o-mini",
+      "apiKey": "",
+      "timeoutMs": 1200,
+      "minChars": 18,
+      "maxChars": 180
+    }
   },
   "vocabulary": {
     "enabled": true
@@ -84,6 +95,21 @@ npm start
 ```
 
 可选快捷键值：`RIGHT COMMAND`, `LEFT COMMAND`, `RIGHT OPTION`, `LEFT OPTION`, `RIGHT CTRL`, `LEFT CTRL`, `F13`, `F14`, `F15`
+可选模型值：`base`（默认）或 `small`（更准，稍慢）
+
+### 可选轻量 LLM（速度权衡）
+
+- 默认关闭，仅在文本长度落在阈值内才触发（`minChars ~ maxChars`）。
+- 超时会自动回退本地规则结果，不阻塞输入。
+- 可通过设置页填写 API Key（本地保存），或设置环境变量：
+
+```bash
+export KORY_LLM_API_KEY="your_api_key"
+```
+
+- 速度优先建议：`timeoutMs <= 1000`, `minChars >= 24`。
+- 质量优先建议：`timeoutMs 1200~1800`，并继续维护 `vocabulary.replacements`。
+- Finder 启动时若环境变量未生效，优先在设置页填写 API Key。
 
 ## 自定义词表
 
@@ -98,11 +124,15 @@ npm start
     "TypeScript",
     "Kubernetes",
     "..."
-  ]
+  ],
+  "replacements": {
+    "JMI": "Gemini",
+    "mini max": "MiniMax"
+  }
 }
 ```
 
-这些词汇会在识别时作为提示词，提高特定术语的识别准确率。
+`words` 会作为识别提示词；`replacements` 会在识别后做文本纠正，适合修正专有词误识别。
 
 ## 开发
 

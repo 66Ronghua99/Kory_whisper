@@ -40,6 +40,10 @@
   - [x] 修复 Finder 启动权限提示与快捷键监听初始化 (await + 权限引导)
   - [x] 修复 Finder 启动时 rec 命令路径问题 (PATH 补全 + 绝对路径探测)
   - [x] 增加菜单栏录音状态可视反馈 (●/…/✓/!)
+  - [x] 增加简体中文输出转换（OpenCC + 设置项）
+  - [x] 增加词表后处理纠错（replacements）与轻量断句优化
+  - [x] 支持模型切换（base/small）与按配置自动下载
+  - [x] 增加可选轻量 LLM 后处理（默认关闭，超时自动回退）
   - [ ] 测试权限请求流程
 
 ## 待办 (TODO)
@@ -60,4 +64,4 @@
 ## 关键文件路径
 - 配置: `~/.kory-whisper/config.json`
 - 词表: `~/.kory-whisper/vocabulary.json`
-- 模型: `./models/ggml-base.bin`
+- 模型: `./models/ggml-{base|small}.bin`

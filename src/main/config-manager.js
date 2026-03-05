@@ -1,7 +1,7 @@
 /**
  * Deps: fs, path, os
  * Used By: index.js
- * Last Updated: 2024-03-04
+ * Last Updated: 2026-03-05
  *
  * 配置管理器 - 处理应用配置的加载和保存
  */
@@ -9,7 +9,6 @@
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
-const { app } = require('electron');
 
 class ConfigManager {
   constructor() {
@@ -27,7 +26,7 @@ class ConfigManager {
       // 读取或创建配置文件
       try {
         const data = await fs.readFile(this.configPath, 'utf-8');
-        this.config = JSON.parse(data);
+        this.config = this.mergeWithDefaults(JSON.parse(data));
       } catch (error) {
         // 配置文件不存在，创建默认配置
         this.config = this.getDefaultConfig();
@@ -40,7 +39,7 @@ class ConfigManager {
       } catch {
         await fs.writeFile(
           this.vocabPath,
-          JSON.stringify({ words: [] }, null, 2),
+          JSON.stringify({ words: [], replacements: {} }, null, 2),
           'utf-8'
         );
       }
@@ -58,10 +57,10 @@ class ConfigManager {
 
   async save(config) {
     try {
-      this.config = config;
+      this.config = this.mergeWithDefaults(config);
       await fs.writeFile(
         this.configPath,
-        JSON.stringify(config, null, 2),
+        JSON.stringify(this.config, null, 2),
         'utf-8'
       );
       console.log('[Config] Saved config to:', this.configPath);
@@ -101,7 +100,20 @@ class ConfigManager {
         model: 'base',
         modelPath: './models/ggml-base.bin',
         language: 'zh',
-        prompt: ''
+        prompt: '',
+        outputScript: 'simplified',
+        enablePunctuation: true,
+        llm: {
+          enabled: false,
+          endpoint: 'https://api.openai.com/v1/chat/completions',
+          model: 'gpt-4o-mini',
+          timeoutMs: 1200,
+          minChars: 18,
+          maxChars: 180,
+          temperature: 0.1,
+          apiKeyEnv: 'KORY_LLM_API_KEY',
+          apiKey: ''
+        }
       },
       vocabulary: {
         enabled: true,
@@ -113,6 +125,30 @@ class ConfigManager {
         autoPunctuation: false
       }
     };
+  }
+
+  mergeWithDefaults(config = {}) {
+    return this.deepMerge(this.getDefaultConfig(), config);
+  }
+
+  deepMerge(base, override) {
+    if (override === undefined || override === null) {
+      return base;
+    }
+
+    if (Array.isArray(base) || Array.isArray(override)) {
+      return Array.isArray(override) ? override : base;
+    }
+
+    if (typeof base !== 'object' || typeof override !== 'object') {
+      return override;
+    }
+
+    const merged = { ...base };
+    for (const key of Object.keys(override)) {
+      merged[key] = this.deepMerge(base[key], override[key]);
+    }
+    return merged;
   }
 }
 

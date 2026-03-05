@@ -1,7 +1,7 @@
 /**
  * Deps: fs, https, path, events
  * Used By: index.js
- * Last Updated: 2024-03-04
+ * Last Updated: 2026-03-05
  *
  * 模型下载器 - 自动下载 Whisper 模型文件
  */
@@ -82,8 +82,8 @@ class ModelDownloader extends EventEmitter {
   getModelInfo(modelName) {
     const models = {
       'ggml-tiny.bin': { size: '39 MB', desc: '速度最快，精度较低' },
-      'ggml-base.bin': { size: '74 MB', desc: '推荐，速度与精度平衡' },
-      'ggml-small.bin': { size: '244 MB', desc: '精度更高，速度较慢' },
+      'ggml-base.bin': { size: '141 MB', desc: '推荐，速度与精度平衡' },
+      'ggml-small.bin': { size: '466 MB', desc: '精度更高，速度稍慢' },
       'ggml-medium.bin': { size: '769 MB', desc: '高精度，速度较慢' },
       'ggml-large.bin': { size: '1.5 GB', desc: '最高精度，速度最慢' }
     };
