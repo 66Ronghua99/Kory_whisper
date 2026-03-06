@@ -105,14 +105,23 @@ class ConfigManager {
         enablePunctuation: true,
         llm: {
           enabled: false,
-          endpoint: 'https://api.openai.com/v1/chat/completions',
-          model: 'gpt-4o-mini',
-          timeoutMs: 1200,
-          minChars: 18,
-          maxChars: 180,
-          temperature: 0.1,
-          apiKeyEnv: 'KORY_LLM_API_KEY',
-          apiKey: ''
+          provider: 'local',
+          local: {
+            modelPath: './models/qwen2.5-0.5b-instruct-q3_k_m.gguf',
+            timeoutMs: 3000,
+            maxTokens: 240,
+            port: 18080
+          },
+          remote: {
+            endpoint: 'https://api.openai.com/v1/chat/completions',
+            model: 'gpt-4o-mini',
+            timeoutMs: 1200,
+            minChars: 18,
+            maxChars: 180,
+            temperature: 0.1,
+            apiKeyEnv: 'KORY_LLM_API_KEY',
+            apiKey: ''
+          }
         }
       },
       vocabulary: {

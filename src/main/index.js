@@ -452,6 +452,10 @@ app.on('will-quit', () => {
   if (koryApp.shortcutManager) {
     koryApp.shortcutManager.destroy();
   }
+  // 停止本地 LLM 服务器
+  if (koryApp.whisperEngine && koryApp.whisperEngine.localLLM) {
+    koryApp.whisperEngine.localLLM.stopServer();
+  }
 });
 
 // 单实例锁
