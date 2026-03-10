@@ -1,13 +1,13 @@
 /**
- * Deps: node-global-key-listener
+ * Deps: uiohook-napi
  * Used By: index.js
- * Last Updated: 2026-03-05
+ * Last Updated: 2026-03-07
  *
  * 全局快捷键管理器 - 处理长按检测
  * 支持: LEFT/RIGHT COMMAND, OPTION, CONTROL, F13-F15, Fn 等
  */
 
-const { GlobalKeyboardListener } = require('node-global-key-listener');
+const { uIOhook, UiohookKey } = require('uiohook-napi');
 const { EventEmitter } = require('events');
 
 class ShortcutManager extends EventEmitter {
@@ -15,77 +15,80 @@ class ShortcutManager extends EventEmitter {
     super();
     // 默认使用右 Command 键 (所有 Mac 都有)
     this.key = options.key || 'RIGHT COMMAND';
-    // node-global-key-listener 使用 META 而不是 COMMAND
-    this.eventKey = this.mapKeyToEventName(this.key);
+    this.keyCode = this.mapKeyToCode(this.key);
     this.longPressDuration = options.longPressDuration || options.duration || 500;
     this.onInfo = options.onInfo || null;
     this.onError = options.onError || null;
-    this.keyboard = null;  // 延迟初始化，避免权限问题导致卡死
-    this.listener = null;
     this.pressTimer = null;
     this.isRecording = false;
     this.isKeyDown = false;
   }
 
-  // 将配置键名映射到事件名
-  mapKeyToEventName(key) {
-    // node-global-key-listener 在 macOS 上使用 META 表示 Command 键
-    return key.replace('COMMAND', 'META');
+  // 将配置键名映射到 keycode
+  mapKeyToCode(key) {
+    const keyMap = {
+      'LEFT COMMAND': UiohookKey.Meta,
+      'RIGHT COMMAND': UiohookKey.MetaRight,
+      'LEFT OPTION': UiohookKey.Alt,
+      'RIGHT OPTION': UiohookKey.AltRight,
+      'LEFT CONTROL': UiohookKey.Ctrl,
+      'RIGHT CONTROL': UiohookKey.CtrlRight,
+      'LEFT SHIFT': UiohookKey.Shift,
+      'RIGHT SHIFT': UiohookKey.ShiftRight,
+      'F13': UiohookKey.F13,
+      'F14': UiohookKey.F14,
+      'F15': UiohookKey.F15,
+      'F16': UiohookKey.F16,
+      'F17': UiohookKey.F17,
+      'F18': UiohookKey.F18,
+      'F19': UiohookKey.F19,
+      'F20': UiohookKey.F20,
+      'F21': UiohookKey.F21,
+      'F22': UiohookKey.F22,
+      'F23': UiohookKey.F23,
+      'F24': UiohookKey.F24,
+    };
+    return keyMap[key] || UiohookKey.MetaRight;
   }
 
   async init() {
-    console.log('[Shortcut] Initializing with key:', this.key, '(event:', this.eventKey + ')');
+    console.log('[Shortcut] Initializing with key:', this.key, '(keycode:', this.keyCode + ')');
 
     try {
-      // 延迟初始化，避免在构造函数中就尝试获取权限
-      this.keyboard = new GlobalKeyboardListener({
-        mac: {
-          onError: (errorCode) => {
-            console.error('[Shortcut] MacKeyServer closed with code:', errorCode);
-            if (this.onError) {
-              this.onError(errorCode);
-            }
-          },
-          onInfo: (info) => {
-            const message = String(info || '').trim();
-            if (!message) return;
-            console.log('[Shortcut][MacKeyServer]', message);
-            if (this.onInfo) {
-              this.onInfo(message);
-            }
-          }
-        }
-      });
+      // 监听 keydown 事件
+      uIOhook.on('keydown', (e) => {
+        const isTargetKey = e.keycode === this.keyCode;
 
-      this.listener = (event, down) => {
-        const eventName = event?.name || '';
-        // 调试：记录所有按键事件（用于诊断）
-        const isTargetKey = eventName === this.eventKey;
-        if (isTargetKey || eventName.includes('COMMAND') || eventName.includes('META')) {
-          console.log('[Shortcut] Raw event:', eventName, 'state:', event.state, 'down:', JSON.stringify(down));
+        if (isTargetKey || e.keycode === UiohookKey.Meta || e.keycode === UiohookKey.MetaRight) {
+          console.log('[Shortcut] Key down:', e.keycode, 'target:', this.keyCode, 'metaKey:', e.metaKey);
         }
-
-        const isPressed = down[this.eventKey] === true;
 
         // 检测按键按下
-        if (isTargetKey && isPressed && !this.isKeyDown) {
+        if (isTargetKey && !this.isKeyDown) {
           console.log('[Shortcut] Target key pressed:', this.key);
           this.isKeyDown = true;
           this.handleKeyDown();
         }
+      });
+
+      // 监听 keyup 事件
+      uIOhook.on('keyup', (e) => {
+        const isTargetKey = e.keycode === this.keyCode;
+
+        if (isTargetKey || e.keycode === UiohookKey.Meta || e.keycode === UiohookKey.MetaRight) {
+          console.log('[Shortcut] Key up:', e.keycode, 'target:', this.keyCode);
+        }
 
         // 检测按键释放
-        if (isTargetKey && !isPressed && this.isKeyDown) {
+        if (isTargetKey && this.isKeyDown) {
           console.log('[Shortcut] Target key released:', this.key);
           this.isKeyDown = false;
           this.handleKeyUp();
         }
+      });
 
-        // 不要返回 true，让事件继续传播，避免键盘卡死
-        return false;
-      };
-
-      await this.keyboard.addListener(this.listener);
+      // 启动监听
+      uIOhook.start();
 
       console.log('[Shortcut] Listener registered successfully');
     } catch (error) {
@@ -130,14 +133,11 @@ class ShortcutManager extends EventEmitter {
       clearTimeout(this.pressTimer);
       this.pressTimer = null;
     }
-    // 正确清理监听器
-    if (this.keyboard) {
-      if (this.listener) {
-        this.keyboard.removeListener(this.listener);
-        this.listener = null;
-      }
-      this.keyboard.kill();
-      this.keyboard = null;
+    // 停止监听
+    try {
+      uIOhook.stop();
+    } catch (e) {
+      console.error('[Shortcut] Error stopping uiohook:', e);
     }
     this.isKeyDown = false;
     this.isRecording = false;

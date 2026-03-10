@@ -158,6 +158,23 @@ class KoryWhisperApp {
     // 长按开始 - 开始录音
     this.shortcutManager.on('longPressStart', async () => {
       logger.info('[Main] Long press started - recording...');
+
+      // 每次录音前检查麦克风权限
+      const { systemPreferences } = require('electron');
+      const micStatus = systemPreferences.getMediaAccessStatus('microphone');
+      logger.info('[Main] Microphone status before recording:', micStatus);
+
+      if (micStatus !== 'granted') {
+        logger.warn('[Main] Microphone permission not granted, requesting...');
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        if (!granted) {
+          logger.error('[Main] Microphone permission denied');
+          this.trayManager.showErrorState('麦克风权限被拒绝，请在系统设置中允许');
+          systemPreferences.openSystemPreferences('security', 'Privacy_Microphone');
+          return;
+        }
+      }
+
       this.isRecording = true;
       this.trayManager.setRecordingState(true);
 
@@ -167,7 +184,16 @@ class KoryWhisperApp {
         logger.error('[Main] Failed to start recording:', error);
         this.isRecording = false;
         this.trayManager.setRecordingState(false);
-        this.trayManager.showErrorState('录音启动失败: ' + error.message);
+
+        // 检测权限相关错误
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('can not open audio device') || errorMsg.includes('audio device')) {
+          this.trayManager.showErrorState('麦克风权限被拒绝，请在系统设置中允许');
+          const { systemPreferences } = require('electron');
+          systemPreferences.openSystemPreferences('security', 'Privacy_Microphone');
+        } else {
+          this.trayManager.showErrorState('录音启动失败: ' + error.message);
+        }
       }
     });
 

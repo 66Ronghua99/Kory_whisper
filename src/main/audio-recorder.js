@@ -130,9 +130,7 @@ class AudioRecorder {
           const msg = data.toString().trim();
           if (!msg) return;
           stderrBuffer += (stderrBuffer ? '\n' : '') + msg;
-          if (msg.toLowerCase().includes('error') || msg.toLowerCase().includes('fail')) {
-            console.error('[Audio] Sox stderr:', msg);
-          }
+          console.error('[Audio] Sox stderr:', msg);
         });
 
         setTimeout(() => {
