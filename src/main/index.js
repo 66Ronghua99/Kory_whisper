@@ -245,13 +245,15 @@ class KoryWhisperApp {
   }
 
   resolveModelKey(model) {
-    return model === 'small' ? 'small' : 'base';
+    const validModels = ['base', 'small', 'medium'];
+    return validModels.includes(model) ? model : 'base';
   }
 
   getModelFilename(modelKey) {
     const mapping = {
       base: 'ggml-base.bin',
-      small: 'ggml-small.bin'
+      small: 'ggml-small.bin',
+      medium: 'ggml-medium.bin'
     };
     return mapping[this.resolveModelKey(modelKey)];
   }
@@ -259,7 +261,8 @@ class KoryWhisperApp {
   getModelMinBytes(modelName) {
     const minBytes = {
       'ggml-base.bin': 100 * 1024 * 1024,
-      'ggml-small.bin': 300 * 1024 * 1024
+      'ggml-small.bin': 300 * 1024 * 1024,
+      'ggml-medium.bin': 700 * 1024 * 1024
     };
     return minBytes[modelName] || 50 * 1024 * 1024;
   }
@@ -304,7 +307,8 @@ class KoryWhisperApp {
 
     progressWin.loadURL(`data:text/html,
       <html>
-      <body style="font-family: -apple-system; text-align: center; padding: 30px;">
+      <head><meta charset="UTF-8"></head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif; text-align: center; padding: 30px;">
         <h3>正在下载语音模型...</h3>
         <p id="progress">0%</p>
         <p style="font-size: 12px; color: #666;">模型: ${modelName} (${modelInfo.size})</p>

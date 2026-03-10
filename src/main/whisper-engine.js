@@ -1,17 +1,16 @@
 /**
- * Deps: child_process, fs, path, opencc-js, llm-postprocessor, local-llm
+ * Deps: child_process, fs, path, opencc-js
  * Used By: index.js
- * Last Updated: 2026-03-06
+ * Last Updated: 2026-03-07
  *
  * Whisper 推理引擎 - 调用 whisper.cpp 进行语音识别
+ * 注意：LLM 后处理已独立为单独模块 (llm-postprocessor.js / local-llm.js)
  */
 
 const { execFile } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const OpenCC = require('opencc-js');
-const LLMPostprocessor = require('./llm-postprocessor');
-const LocalLLM = require('./local-llm');
 
 class WhisperEngine {
   constructor(options = {}) {
@@ -23,18 +22,6 @@ class WhisperEngine {
     this.enablePunctuation = options.enablePunctuation !== false;
     this.whisperBin = options.whisperBin || this.getWhisperBinaryPath();
     this.toSimplified = this.createSimplifiedConverter();
-
-    const llmConfig = options.llm || {};
-    this.llmProvider = llmConfig.provider || 'local';
-    this.llmPostprocessor = new LLMPostprocessor(llmConfig.remote || {});
-    this.localLLM = new LocalLLM(llmConfig.local || {});
-
-    // 本地 LLM 时启动后台服务
-    if (this.llmProvider === 'local' && this.localLLM) {
-      this.localLLM.startServer().catch(err => {
-        console.warn('[Whisper] Local LLM server start failed:', err.message);
-      });
-    }
   }
 
   getWhisperBinaryPath() {
@@ -151,18 +138,6 @@ class WhisperEngine {
     if (Object.prototype.hasOwnProperty.call(options, 'enablePunctuation')) {
       this.enablePunctuation = options.enablePunctuation !== false;
     }
-    if (Object.prototype.hasOwnProperty.call(options, 'llm')) {
-      const llmConfig = options.llm;
-      if (llmConfig.provider) {
-        this.llmProvider = llmConfig.provider;
-      }
-      if (llmConfig.remote) {
-        this.llmPostprocessor.updateConfig(llmConfig.remote);
-      }
-      if (llmConfig.local) {
-        this.localLLM = new LocalLLM(llmConfig.local);
-      }
-    }
   }
 
   buildPrompt(vocabulary) {
@@ -255,23 +230,7 @@ class WhisperEngine {
       console.warn('[Whisper] Failed to apply vocabulary corrections:', error.message);
     }
 
-    // LLM 处理优先（让 LLM 先看到原始文本，更容易修正）
-    try {
-      if (this.llmProvider === 'local') {
-        result = await this.localLLM.process(result);
-      } else {
-        result = await this.llmPostprocessor.process(result, {
-          words: vocabularyData?.words || [],
-          replacements: vocabularyData?.replacements || {},
-          language: this.language,
-          outputScript: this.outputScript
-        });
-      }
-    } catch (error) {
-      console.warn('[Whisper] LLM postprocess failed, fallback to original:', error.message);
-    }
-
-    // 标点在 LLM 之后处理
+    // 标点处理
     if (this.shouldUseChinesePunctuation()) {
       result = this.applyChinesePunctuation(result);
     }
