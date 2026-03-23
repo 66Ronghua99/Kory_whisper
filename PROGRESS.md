@@ -11,6 +11,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 - Superpowers templates added under `docs/superpowers/templates/`
 - Bootstrap manifest created at `.harness/bootstrap.toml`
 - Whisper transcription now fails fast on child-process errors instead of returning partial `.txt` output as a successful result; verification captured at `artifacts/whisper-engine-partial-output/verify.txt`
+- Whisper debug captures now stay on by default under `~/.kory-whisper/debug-captures/`, preserving the latest three runs with `audio.wav`, optional `raw.txt`, and `meta.json`; verification captured at `artifacts/whisper-debug-captures/verify.txt`
 
 ## In Progress
 
@@ -33,6 +34,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
   - macOS start/output system cue playback
   - configurable default sounds (`Tink` + `Glass`) via settings
   - shared Whisper models under `~/.kory-whisper/models/`
+  - Whisper debug captures under `~/.kory-whisper/debug-captures/` with latest-three retention
   - no duplicate model download when changing worktrees
 - Governance baseline:
   - `npm run lint` proves platform-selector and renderer boundary invariants

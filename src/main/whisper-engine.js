@@ -21,6 +21,7 @@ class WhisperEngine {
     this.outputScript = options.outputScript || 'simplified';
     this.enablePunctuation = options.enablePunctuation !== false;
     this.whisperBin = options.whisperBin || this.getWhisperBinaryPath();
+    this.debugCaptureStore = options.debugCaptureStore || null;
     this.toSimplified = this.createSimplifiedConverter();
   }
 
@@ -84,19 +85,39 @@ class WhisperEngine {
       }, async (error, stdout, stderr) => {
         const duration = Date.now() - startTime;
         console.log(`[Whisper] Execution completed in ${duration}ms`);
+        const stdoutSummary = this.summarizeCaptureText(stdout);
+        const stderrSummary = this.summarizeCaptureText(stderr);
+        const captureBase = {
+          timestamp: new Date(),
+          audioPath,
+          rawTextPath: null,
+          meta: {
+            prompt,
+            args: [...args],
+            stdoutSummary,
+            stderrSummary,
+            stdoutCharCount: typeof stdout === 'string' ? stdout.length : 0,
+            stderrCharCount: typeof stderr === 'string' ? stderr.length : 0,
+            finalText: null,
+            errorMessage: null
+          }
+        };
 
         if (error) {
           console.error('[Whisper] Process error:', error);
           if (stderr) {
             console.error('[Whisper] stderr:', stderr);
           }
+          const detail = stderr ? ` (${String(stderr).trim()})` : '';
+          captureBase.meta.errorMessage = `Whisper transcription failed: ${error.message}${detail}`;
+          captureBase.rawTextPath = await this.findRawTextPath(outputPath);
+          await this.persistDebugCapture(captureBase);
           try {
             await this.cleanup(outputPath);
           } catch {
             // 保持原始错误为主
           }
-          const detail = stderr ? ` (${String(stderr).trim()})` : '';
-          reject(new Error(`Whisper transcription failed: ${error.message}${detail}`));
+          reject(new Error(captureBase.meta.errorMessage));
           return;
         }
         if (stderr) {
@@ -114,16 +135,27 @@ class WhisperEngine {
           const text = await fs.readFile(txtPath, 'utf-8');
           console.log('[Whisper] Output file read successfully');
 
+          const result = await this.postProcessText(text.trim(), vocabularyData);
+          captureBase.rawTextPath = txtPath;
+          captureBase.meta.finalText = result;
+          await this.persistDebugCapture(captureBase);
+
           // 清理临时文件
           await this.cleanup(outputPath);
-
-          const result = await this.postProcessText(text.trim(), vocabularyData);
           console.log('[Whisper] Result:', result);
           resolve(result);
 
         } catch (readError) {
           console.error('[Whisper] Failed to read output file:', readError.message);
           console.error('[Whisper] Output file path:', txtPath);
+          captureBase.meta.errorMessage = `Failed to read transcription output: ${readError.message}`;
+          captureBase.rawTextPath = await this.findRawTextPath(outputPath);
+          await this.persistDebugCapture(captureBase);
+          try {
+            await this.cleanup(outputPath);
+          } catch {
+            // 保持原始错误为主
+          }
           reject(new Error(`Failed to read transcription output: ${readError.message}`));
         }
       });
@@ -199,6 +231,37 @@ class WhisperEngine {
       } catch {
         // 忽略删除错误
       }
+    }
+  }
+
+  async findRawTextPath(outputPath) {
+    const txtPath = `${outputPath}.txt`;
+    try {
+      await fs.access(txtPath);
+      return txtPath;
+    } catch {
+      return null;
+    }
+  }
+
+  summarizeCaptureText(text) {
+    if (typeof text !== 'string') {
+      return '';
+    }
+
+    return text.length > 4096 ? text.slice(0, 4096) : text;
+  }
+
+  async persistDebugCapture(captureInput) {
+    if (!this.debugCaptureStore || typeof this.debugCaptureStore.persist !== 'function') {
+      return null;
+    }
+
+    try {
+      return await this.debugCaptureStore.persist(captureInput);
+    } catch (error) {
+      console.warn('[Whisper] Failed to persist debug capture:', error.message);
+      return null;
     }
   }
 

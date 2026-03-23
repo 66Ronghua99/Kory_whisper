@@ -239,3 +239,27 @@ macOS 需要以下权限：
 **验证**:
 - `npm run verify`
 - 证据文件: `artifacts/whisper-engine-partial-output/verify.txt`
+
+### 2026-03-23 Whisper debug captures 常驻保留
+**背景**:
+1. 用户反馈有些录音转写结果明显不对，但应用原先会在每次转写后删除临时 `.wav` 和 `.txt`，导致事后无法直接复跑 `whisper-cli` 排查。
+
+**实现**:
+1. 主进程现在默认启用 `DebugCaptureStore`，目录固定在 `~/.kory-whisper/debug-captures/`
+2. 每次转写会在清理临时文件前，尽量保留：
+   - `audio.wav`
+   - `raw.txt`（Whisper 原始输出，保留在任何 trim / 简繁转换 / replacement / 标点后处理之前）
+   - `meta.json`（含 timestamp、源临时路径、capture 路径、args、effective prompt、stdout/stderr 摘要、最终文本或错误信息）
+3. retention 固定为最近 3 条；更早的 capture 目录自动删除
+
+**排查建议**:
+1. 下次出现“前面一大段被吞掉”或“出现奇怪 prompt 文本”时，先看 `~/.kory-whisper/debug-captures/` 最新目录
+2. 优先对比 `raw.txt` 和 `meta.json` 里的 `finalText` / `prompt` / `args`
+3. 如果需要人工复跑，直接拿保留下来的 `audio.wav` 去跑 `whisper-cli`
+
+**验证**:
+- `node --test tests/debug-capture-store.test.js`
+- `node --test tests/whisper-engine.test.js`
+- `npm run verify`
+- 证据文件: `artifacts/whisper-debug-captures/verify.txt`
+- retention 证据: `artifacts/whisper-debug-captures/retention-check.txt`

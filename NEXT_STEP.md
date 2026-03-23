@@ -1,3 +1,3 @@
 # Next Step
 
-Choose the next seam to bring under automated proof and write the follow-up spec/plan for it; start with `shortcut-manager` or `whisper-engine`, because those are the biggest remaining main-process modules still outside the guarded coverage slice.
+Write the next follow-up spec/plan to bring `shortcut-manager` under automated proof, because `whisper-engine` now has focused regression coverage for partial-output failure handling and debug-capture persistence.

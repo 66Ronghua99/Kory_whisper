@@ -13,10 +13,12 @@ const logger = require('./logger');
 const ShortcutManager = require('./shortcut-manager');
 const platform = require('./platform');
 const WhisperEngine = require('./whisper-engine');
+const DebugCaptureStore = require('./debug-capture-store');
 const TrayManager = require('./tray-manager');
 const ConfigManager = require('./config-manager');
 const ModelDownloader = require('./model-downloader');
 const {
+  getSharedAppDir,
   getSharedModelsDir,
   getSharedModelPath,
   getBundledModelPath
@@ -81,6 +83,11 @@ class KoryWhisperApp {
 
     // 获取正确的模型路径（打包后路径不同）
     const modelPath = path.join(this.getModelsDir(), modelName);
+    const debugCaptureDir = path.join(getSharedAppDir(), 'debug-captures');
+    const debugCaptureStore = new DebugCaptureStore(debugCaptureDir, {
+      onError: (message, error) => logger.error('[DebugCaptureStore]', message, error)
+    });
+    logger.info('[Main] Debug capture directory:', debugCaptureDir);
 
     // 初始化各模块
     this.audioRecorder = platform.getAudioRecorder({
@@ -96,7 +103,8 @@ class KoryWhisperApp {
       outputScript: config.whisper?.outputScript || 'simplified',
       enablePunctuation: config.whisper?.enablePunctuation !== false,
       llm: config.whisper?.llm || {},
-      whisperBin: this.getWhisperBinPath()
+      whisperBin: this.getWhisperBinPath(),
+      debugCaptureStore
     });
 
     this.inputSimulator = platform.getInputSimulator({
