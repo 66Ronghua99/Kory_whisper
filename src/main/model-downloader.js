@@ -54,6 +54,29 @@ class ModelDownloader extends EventEmitter {
     });
   }
 
+  async seedModelFromPath(sourcePath, modelName = 'ggml-base.bin') {
+    if (!sourcePath) {
+      return { copied: false, path: null };
+    }
+
+    const targetPath = path.join(this.modelsDir, modelName);
+
+    try {
+      await fs.access(sourcePath);
+    } catch {
+      return { copied: false, path: targetPath };
+    }
+
+    await fs.mkdir(this.modelsDir, { recursive: true });
+    await fs.copyFile(sourcePath, targetPath);
+
+    return {
+      copied: true,
+      path: targetPath,
+      size: (await fs.stat(targetPath)).size
+    };
+  }
+
   handleDownload(response, file, modelPath, onProgress, resolve, reject) {
     const totalBytes = parseInt(response.headers['content-length'], 10);
     let downloadedBytes = 0;

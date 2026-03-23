@@ -61,6 +61,18 @@ macOS 需要以下权限：
 2. 延迟初始化 `ModelDownloader`，传入正确的 `modelsDir`
 3. 开发环境: `./models/`，打包后: `process.resourcesPath/models/`
 
+### 2026-03-23 Whisper 模型共享缓存
+**问题**: 切换 worktree 或源码路径时，Whisper 模型目录跟着仓库走，导致重复下载同一模型。
+
+**解决方案**:
+1. 将 Whisper 模型统一收敛到 `~/.kory-whisper/models/`
+2. 运行时只把这个目录视为 canonical model store，不再依赖仓库内 `models/`
+3. 打包态如果 `process.resourcesPath/models/` 下有现成模型，先复制到共享目录，再回退到下载流程
+
+**边界**:
+- 这次只迁移 Whisper 模型，不迁移本地 LLM 模型
+- `whisper-cli` 二进制仍然保持现有路径策略
+
 ### 2024-03-05 录音文件格式问题修复
 **问题**: Whisper 识别卡死，显示音频时长 67108 秒（实际 3 秒）
 **原因**: `node-record-lpcm16` 库生成的 WAV 文件头错误，文件大小字段显示 2GB
@@ -164,3 +176,28 @@ macOS 需要以下权限：
 **验证**:
 - `node --test tests/input-simulator-darwin.test.js`
 - 证据文件: `artifacts/manual-clipboard-output/node-test.txt`
+
+### 2026-03-23 Audio cues 平台边界
+**背景**: 录音开始和输出完成需要声音反馈，同时仓库后续要支持 Windows。
+
+**约束**:
+1. 上层 workflow 不应直接判断 `process.platform`。
+2. 提示音能力应和 tray 状态、输出注入逻辑分离。
+
+**实践**:
+1. 在 `src/main/platform/` 下新增独立 adapter，而不是把平台判断写回 `src/main/index.js`。
+2. 上层只调用统一接口，如 `playRecordingStart()`、`playOutputReady()`。
+3. macOS 当前可用 `osascript -e "beep"` 播放系统提示音；Windows 先保留同接口 no-op 实现，等后续再接原生声音 API。
+
+### 2026-03-23 Audio cues 默认音与设置
+**默认值**:
+1. 开始录音：`Tink`
+2. 输出完成：`Glass`
+
+**配置约束**:
+1. 用 `audioCues.enabled`、`audioCues.recordingStartSound`、`audioCues.outputReadySound` 表达设置
+2. 设置页只暴露受支持的固定声音名，不允许自由输入系统路径
+
+**实现说明**:
+1. macOS adapter 直接播放 `/System/Library/Sounds/<name>.aiff`
+2. Windows 先保留同样配置接口，后续再映射到 Windows 原生系统声音

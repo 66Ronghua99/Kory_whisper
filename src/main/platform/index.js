@@ -13,6 +13,7 @@ const isLinux = platform === 'linux';
 
 let audioRecorderModule = null;
 let inputSimulatorModule = null;
+let audioCuePlayerModule = null;
 
 // Lazy load platform-specific modules
 function getAudioRecorderModule() {
@@ -37,6 +38,17 @@ function getInputSimulatorModule() {
   return inputSimulatorModule;
 }
 
+function getAudioCuePlayerModule() {
+  if (!audioCuePlayerModule) {
+    if (isWindows) {
+      audioCuePlayerModule = require('./audio-cues-win32.js');
+    } else {
+      audioCuePlayerModule = require('./audio-cues-darwin.js');
+    }
+  }
+  return audioCuePlayerModule;
+}
+
 module.exports = {
   isMac,
   isWindows,
@@ -51,5 +63,10 @@ module.exports = {
   getInputSimulator(options) {
     const SimulatorClass = getInputSimulatorModule();
     return new SimulatorClass(options);
+  },
+
+  getAudioCuePlayer(options) {
+    const AudioCuePlayerClass = getAudioCuePlayerModule();
+    return new AudioCuePlayerClass(options);
   }
 };

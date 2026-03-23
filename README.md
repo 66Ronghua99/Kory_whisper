@@ -66,7 +66,8 @@ npm start
 
 ## 配置
 
-配置文件位于 `~/.kory-whisper/config.json`：
+配置文件位于 `~/.kory-whisper/config.json`。
+Whisper 模型会统一缓存在 `~/.kory-whisper/models/`，不同 worktree、源码路径和打包 app 会共享同一份模型文件：
 
 ```json
 {

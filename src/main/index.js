@@ -16,6 +16,11 @@ const WhisperEngine = require('./whisper-engine');
 const TrayManager = require('./tray-manager');
 const ConfigManager = require('./config-manager');
 const ModelDownloader = require('./model-downloader');
+const {
+  getSharedModelsDir,
+  getSharedModelPath,
+  getBundledModelPath
+} = require('./model-paths');
 
 class KoryWhisperApp {
   constructor() {
@@ -25,6 +30,7 @@ class KoryWhisperApp {
     this.audioRecorder = null;
     this.whisperEngine = null;
     this.inputSimulator = null;
+    this.audioCuePlayer = null;
     this.trayManager = null;
     this.isRecording = false;
   }
@@ -96,6 +102,8 @@ class KoryWhisperApp {
     this.inputSimulator = platform.getInputSimulator({
       appendSpace: config.input?.appendSpace !== false
     });
+
+    this.audioCuePlayer = platform.getAudioCuePlayer(config.audioCues || {});
 
     // 初始化托盘（在快捷键之前，确保有 UI 反馈）
     logger.info('[Main] Initializing tray manager...');
@@ -180,6 +188,7 @@ class KoryWhisperApp {
 
       try {
         await this.audioRecorder.start();
+        await this.audioCuePlayer.playRecordingStart();
       } catch (error) {
         logger.error('[Main] Failed to start recording:', error);
         this.isRecording = false;
@@ -218,6 +227,7 @@ class KoryWhisperApp {
         if (text && text.trim()) {
           // 复制到剪贴板，等待用户手动粘贴
           await this.inputSimulator.typeText(text);
+          await this.audioCuePlayer.playOutputReady();
           this.trayManager.showSuccessState();
         } else {
           this.trayManager.showErrorState('未识别到语音');
@@ -238,10 +248,7 @@ class KoryWhisperApp {
   }
 
   getModelsDir() {
-    const isPackaged = app.isPackaged;
-    return isPackaged
-      ? path.join(process.resourcesPath, 'models')
-      : path.join(__dirname, '../../models');
+    return getSharedModelsDir();
   }
 
   resolveModelKey(model) {
@@ -274,6 +281,16 @@ class KoryWhisperApp {
 
     if (modelCheck.exists && modelCheck.size > minSize) {
       console.log('[Main] Model already exists:', modelCheck.path);
+      return true;
+    }
+
+    const bundledModelPath = getBundledModelPath(modelName, {
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath
+    });
+    const seededModel = await this.modelDownloader.seedModelFromPath(bundledModelPath, modelName);
+    if (seededModel.copied && seededModel.size > minSize) {
+      console.log('[Main] Seeded shared model from bundled resources:', seededModel.path);
       return true;
     }
 
@@ -422,7 +439,7 @@ class KoryWhisperApp {
   async applyRuntimeConfig(config) {
     const modelKey = this.resolveModelKey(config.whisper?.model);
     const modelName = this.getModelFilename(modelKey);
-    const modelPath = path.join(this.getModelsDir(), modelName);
+    const modelPath = getSharedModelPath(modelName);
 
     if (config.whisper) {
       config.whisper.model = modelKey;
@@ -452,6 +469,10 @@ class KoryWhisperApp {
 
     if (this.inputSimulator) {
       this.inputSimulator.appendSpace = config.input?.appendSpace !== false;
+    }
+
+    if (this.audioCuePlayer && typeof this.audioCuePlayer.updateOptions === 'function') {
+      this.audioCuePlayer.updateOptions(config.audioCues || {});
     }
   }
 
