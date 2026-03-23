@@ -1,0 +1,19 @@
+{
+  "all": true,
+  "reporter": [
+    "text",
+    "text-summary"
+  ],
+  "check-coverage": true,
+  "lines": 90,
+  "branches": 85,
+  "functions": 85,
+  "include": [
+    "src/main/config-manager.js",
+    "src/main/model-paths.js",
+    "src/main/platform/index.js",
+    "src/main/platform/audio-cues-darwin.js",
+    "src/main/platform/audio-cues-win32.js",
+    "src/main/platform/clipboard-output.js"
+  ]
+}

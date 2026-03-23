@@ -43,6 +43,63 @@ test('darwin audio cue player uses configured sound names when provided', async 
   ]);
 });
 
+test('darwin audio cue player falls back to defaults for unsupported sound names', async () => {
+  const commands = [];
+  const player = new AudioCuePlayerDarwin({
+    recordingStartSound: 'Unknown',
+    outputReadySound: 'AlsoUnknown',
+    runCommand(command) {
+      commands.push(command);
+      return Promise.resolve();
+    }
+  });
+
+  await player.playRecordingStart();
+  await player.playOutputReady();
+
+  assert.deepEqual(commands, [
+    'afplay "/System/Library/Sounds/Tink.aiff"',
+    'afplay "/System/Library/Sounds/Glass.aiff"'
+  ]);
+});
+
+test('darwin audio cue player does not invoke afplay when disabled', async () => {
+  const commands = [];
+  const player = new AudioCuePlayerDarwin({
+    enabled: false,
+    runCommand(command) {
+      commands.push(command);
+      return Promise.resolve();
+    }
+  });
+
+  await player.playRecordingStart();
+  await player.playOutputReady();
+
+  assert.deepEqual(commands, []);
+});
+
+test('darwin audio cue player swallows playback failures after logging', async () => {
+  const errors = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => errors.push(args.join(' '));
+
+  const player = new AudioCuePlayerDarwin({
+    runCommand() {
+      return Promise.reject(new Error('afplay failed'));
+    }
+  });
+
+  try {
+    await assert.doesNotReject(() => player.playRecordingStart());
+  } finally {
+    console.error = originalConsoleError;
+  }
+
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /Failed to play cue: recording-start/);
+});
+
 test('win32 audio cue player exposes the same cue methods as no-op calls', async () => {
   const player = new AudioCuePlayerWin32();
 

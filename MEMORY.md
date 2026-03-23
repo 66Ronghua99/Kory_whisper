@@ -7,6 +7,10 @@
 - `NEXT_STEP.md` should always point to one directly executable next action
 - Existing historical implementation notes remain in `.plan/` until they are superseded by approved Superpowers specs/plans
 - Manual validation evidence should accumulate under `artifacts/`
+- Lint/test hardgate design is documented in `docs/testing/lint-test-design.md`
+- Active implementation/rollout plan for the hardgates lives at `docs/superpowers/plans/2026-03-23-lint-test-hardgates.md`
+- Repo boundary lint entrypoint is `npm run lint` via `scripts/repo-hardgate.js`
+- Guarded-slice coverage ratchet entrypoint is `npm run test:coverage` and currently applies only to the `.c8rc.json` include set
 
 ## 开发环境
 - macOS (Apple Silicon)
@@ -201,3 +205,19 @@ macOS 需要以下权限：
 **实现说明**:
 1. macOS adapter 直接播放 `/System/Library/Sounds/<name>.aiff`
 2. Windows 先保留同样配置接口，后续再映射到 Windows 原生系统声音
+
+### 2026-03-23 lint/test hardgate baseline
+**目标**:
+1. 把平台 selector 单点所有权、renderer/runtime 边界、以及当前最容易证明的 config/platform slice 变成可执行门禁
+2. 先建立 honest ratchet，而不是假装全仓 Electron 主流程都已可覆盖
+
+**当前做法**:
+1. `scripts/repo-hardgate.js` 扫描 `src/`，阻止 `src/main/index.js` 直连 platform leaf adapters
+2. 同一个 hardgate 阻止非 `src/main/platform/index.js` 的生产代码导入 `*-darwin.js` / `*-win32.js`
+3. `src/renderer/` 暂时禁止直接碰 `child_process`、`uiohook-napi`、`whisper-cli` / `afplay` 等 runtime/system surfaces
+4. `.c8rc.json` 只对已冻结的 guarded slice 做 coverage threshold：`config-manager`、`model-paths`、`platform/index`、`audio-cues-*`、`clipboard-output`
+
+**注意**:
+1. 这是 phase-1 baseline，不是 whole-repo coverage 承诺
+2. 以后如果要把 `shortcut-manager`、`whisper-engine`、`index.js` 大块逻辑纳入覆盖率，先拆 seam，再扩 `.c8rc.json`
+3. 新增边界规则时，要同时更新 design doc、plan/evidence 和 hardgate 输出，避免 docs/代码真相漂移

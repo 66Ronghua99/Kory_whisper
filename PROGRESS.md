@@ -16,11 +16,13 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 - Integrated test branch combines platform audio cues with the shared Whisper model store
 - Audio cues now expose configurable defaults and settings controls on top of the integrated branch
 - Manual macOS smoke validation remains the next gate before broader branch integration
+- Lint/test governance baseline now exists with repo-boundary hardgates and guarded-slice coverage ratchet
 
 ## Pending
 
 - Decide whether to merge this combined branch into the clipboard-output branch or keep it as a separate staging branch
 - Re-freeze the next product scope after this integration test closes
+- Expand automated proof beyond the guarded slice once more main-process modules expose seam-friendly collaborators
 
 ## Product Snapshot
 
@@ -31,3 +33,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
   - configurable default sounds (`Tink` + `Glass`) via settings
   - shared Whisper models under `~/.kory-whisper/models/`
   - no duplicate model download when changing worktrees
+- Governance baseline:
+  - `npm run lint` proves platform-selector and renderer boundary invariants
+  - `npm run test:coverage` enforces guarded-slice coverage for config/model-path/platform modules
+  - evidence captured under `artifacts/lint-test-design/`
