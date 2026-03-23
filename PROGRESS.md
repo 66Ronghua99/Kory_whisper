@@ -10,6 +10,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 - Root governance docs and repository map established
 - Superpowers templates added under `docs/superpowers/templates/`
 - Bootstrap manifest created at `.harness/bootstrap.toml`
+- Whisper transcription now fails fast on child-process errors instead of returning partial `.txt` output as a successful result; verification captured at `artifacts/whisper-engine-partial-output/verify.txt`
 
 ## In Progress
 

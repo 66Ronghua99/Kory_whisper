@@ -221,3 +221,21 @@ macOS 需要以下权限：
 1. 这是 phase-1 baseline，不是 whole-repo coverage 承诺
 2. 以后如果要把 `shortcut-manager`、`whisper-engine`、`index.js` 大块逻辑纳入覆盖率，先拆 seam，再扩 `.c8rc.json`
 3. 新增边界规则时，要同时更新 design doc、plan/evidence 和 hardgate 输出，避免 docs/代码真相漂移
+
+### 2026-03-23 长录音偶发只剩尾段输出
+**现象**:
+1. 有时录音持续较久后，最终返回的转写文本只剩后半段或一小段尾部内容。
+
+**根因**:
+1. `WhisperEngine.transcribe()` 对 `whisper-cli` 子进程设置了固定 `60s` 超时和 `1MB` 输出缓冲区。
+2. 一旦子进程因为超时、缓冲区上限或异常退出报错，旧实现仍会继续读取磁盘上的临时 `.txt` 文件。
+3. 这样会把被中途打断后留下的半成品输出误当作成功结果返回，表现成“前半段内容没了，只剩一点尾巴”。
+
+**解决方案**:
+1. 只要 `whisper-cli` 返回 error，就直接失败，不再读取临时 `.txt` 半成品。
+2. 将转写子进程窗口放宽到 `10 分钟` 和 `10MB maxBuffer`，降低长录音被误杀的概率。
+3. 新增回归测试覆盖“成功返回完整文本”和“错误时拒绝半成品输出”两个路径。
+
+**验证**:
+- `npm run verify`
+- 证据文件: `artifacts/whisper-engine-partial-output/verify.txt`

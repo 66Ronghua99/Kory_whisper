@@ -79,14 +79,25 @@ class WhisperEngine {
       const startTime = Date.now();
 
       execFile(this.whisperBin, args, {
-        timeout: 60000, // 60秒超时
-        maxBuffer: 1024 * 1024 // 1MB 输出缓冲区
+        timeout: 10 * 60 * 1000, // 长录音在 small/medium 模型上需要更宽松的转写窗口
+        maxBuffer: 10 * 1024 * 1024 // 避免较长转写输出触发 execFile 缓冲区上限
       }, async (error, stdout, stderr) => {
         const duration = Date.now() - startTime;
         console.log(`[Whisper] Execution completed in ${duration}ms`);
 
         if (error) {
           console.error('[Whisper] Process error:', error);
+          if (stderr) {
+            console.error('[Whisper] stderr:', stderr);
+          }
+          try {
+            await this.cleanup(outputPath);
+          } catch {
+            // 保持原始错误为主
+          }
+          const detail = stderr ? ` (${String(stderr).trim()})` : '';
+          reject(new Error(`Whisper transcription failed: ${error.message}${detail}`));
+          return;
         }
         if (stderr) {
           console.error('[Whisper] stderr:', stderr);
