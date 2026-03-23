@@ -9,10 +9,14 @@
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
+const {
+  getSharedAppDir,
+  getSharedModelPath
+} = require('./model-paths');
 
 class ConfigManager {
   constructor() {
-    this.configDir = path.join(os.homedir(), '.kory-whisper');
+    this.configDir = getSharedAppDir({ homeDir: os.homedir() });
     this.configPath = path.join(this.configDir, 'config.json');
     this.vocabPath = path.join(this.configDir, 'vocabulary.json');
     this.config = null;
@@ -98,7 +102,7 @@ class ConfigManager {
       },
       whisper: {
         model: 'base',
-        modelPath: './models/ggml-base.bin',
+        modelPath: getSharedModelPath('ggml-base.bin'),
         language: 'zh',
         prompt: '',
         outputScript: 'simplified',

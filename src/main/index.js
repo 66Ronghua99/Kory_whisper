@@ -16,6 +16,11 @@ const WhisperEngine = require('./whisper-engine');
 const TrayManager = require('./tray-manager');
 const ConfigManager = require('./config-manager');
 const ModelDownloader = require('./model-downloader');
+const {
+  getSharedModelsDir,
+  getSharedModelPath,
+  getBundledModelPath
+} = require('./model-paths');
 
 class KoryWhisperApp {
   constructor() {
@@ -243,10 +248,7 @@ class KoryWhisperApp {
   }
 
   getModelsDir() {
-    const isPackaged = app.isPackaged;
-    return isPackaged
-      ? path.join(process.resourcesPath, 'models')
-      : path.join(__dirname, '../../models');
+    return getSharedModelsDir();
   }
 
   resolveModelKey(model) {
@@ -279,6 +281,16 @@ class KoryWhisperApp {
 
     if (modelCheck.exists && modelCheck.size > minSize) {
       console.log('[Main] Model already exists:', modelCheck.path);
+      return true;
+    }
+
+    const bundledModelPath = getBundledModelPath(modelName, {
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath
+    });
+    const seededModel = await this.modelDownloader.seedModelFromPath(bundledModelPath, modelName);
+    if (seededModel.copied && seededModel.size > minSize) {
+      console.log('[Main] Seeded shared model from bundled resources:', seededModel.path);
       return true;
     }
 
@@ -427,7 +439,7 @@ class KoryWhisperApp {
   async applyRuntimeConfig(config) {
     const modelKey = this.resolveModelKey(config.whisper?.model);
     const modelName = this.getModelFilename(modelKey);
-    const modelPath = path.join(this.getModelsDir(), modelName);
+    const modelPath = getSharedModelPath(modelName);
 
     if (config.whisper) {
       config.whisper.model = modelKey;

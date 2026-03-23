@@ -53,6 +53,18 @@ macOS 需要以下权限：
 2. 延迟初始化 `ModelDownloader`，传入正确的 `modelsDir`
 3. 开发环境: `./models/`，打包后: `process.resourcesPath/models/`
 
+### 2026-03-23 Whisper 模型共享缓存
+**问题**: 切换 worktree 或源码路径时，Whisper 模型目录跟着仓库走，导致重复下载同一模型。
+
+**解决方案**:
+1. 将 Whisper 模型统一收敛到 `~/.kory-whisper/models/`
+2. 运行时只把这个目录视为 canonical model store，不再依赖仓库内 `models/`
+3. 打包态如果 `process.resourcesPath/models/` 下有现成模型，先复制到共享目录，再回退到下载流程
+
+**边界**:
+- 这次只迁移 Whisper 模型，不迁移本地 LLM 模型
+- `whisper-cli` 二进制仍然保持现有路径策略
+
 ### 2024-03-05 录音文件格式问题修复
 **问题**: Whisper 识别卡死，显示音频时长 67108 秒（实际 3 秒）
 **原因**: `node-record-lpcm16` 库生成的 WAV 文件头错误，文件大小字段显示 2GB
