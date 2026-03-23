@@ -16,6 +16,7 @@ const PLATFORM_PROFILE_DEFAULTS = Object.freeze({
     }
   }
 });
+const SAFE_FALLBACK_PROFILE_DEFAULTS = PLATFORM_PROFILE_DEFAULTS.darwin;
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -48,7 +49,7 @@ function resolveConfigProfileDefaults(options = {}) {
     options.profile?.platform ||
     options.runtimeEnv?.platform ||
     process.platform;
-  const platformDefaults = PLATFORM_PROFILE_DEFAULTS[platform] || {};
+  const platformDefaults = PLATFORM_PROFILE_DEFAULTS[platform] || SAFE_FALLBACK_PROFILE_DEFAULTS;
   const explicitProfileDefaults = options.profile?.configDefaults || options.profileDefaults || {};
 
   return mergeConfigSections(platformDefaults, explicitProfileDefaults);
@@ -56,5 +57,6 @@ function resolveConfigProfileDefaults(options = {}) {
 
 module.exports = {
   PLATFORM_PROFILE_DEFAULTS,
+  SAFE_FALLBACK_PROFILE_DEFAULTS,
   resolveConfigProfileDefaults
 };

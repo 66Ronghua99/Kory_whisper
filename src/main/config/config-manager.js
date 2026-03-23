@@ -6,14 +6,27 @@ const { getSharedAppDir, joinPathSegments } = require('../shared/model-paths');
 const { createConfigDefaults } = require('./config-defaults');
 const { resolveConfigProfileDefaults } = require('./config-profile-defaults');
 
+function resolveRuntimeEnv(options = {}) {
+  const runtimeEnv = options.runtimeEnv || {};
+
+  return createRuntimeEnv({
+    app: options.app || runtimeEnv.app,
+    appPath: options.appPath || runtimeEnv.appPath,
+    arch: options.arch || runtimeEnv.arch,
+    homeDir: options.homeDir || runtimeEnv.homeDir,
+    isPackaged: options.isPackaged !== undefined ? options.isPackaged : runtimeEnv.isPackaged,
+    os: options.os || runtimeEnv.os,
+    platform: options.platform || runtimeEnv.platform,
+    process: options.process || runtimeEnv.process,
+    resourcesPath: options.resourcesPath || runtimeEnv.resourcesPath
+  });
+}
+
 class ConfigManager {
   constructor(options = {}) {
-    this.runtimeEnv = options.runtimeEnv || createRuntimeEnv({
-      app: options.app,
-      homeDir: options.homeDir || os.homedir(),
-      isPackaged: options.isPackaged,
-      platform: options.platform,
-      resourcesPath: options.resourcesPath
+    this.runtimeEnv = resolveRuntimeEnv({
+      ...options,
+      homeDir: options.homeDir || options.runtimeEnv?.homeDir || os.homedir()
     });
     this.profile = options.profile || null;
     this.configDir = options.configDir || getSharedAppDir({ homeDir: this.runtimeEnv.homeDir });
