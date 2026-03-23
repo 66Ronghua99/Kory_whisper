@@ -1,28 +1,32 @@
-# Kory Whisper - 项目进度
+# Progress
 
-## 当前状态：本地 LLM 后处理开发中
+## Active Milestone
 
-### 项目阶段
-- **平台**: macOS (主), Windows (待移植)
-- **核心功能**: 语音输入 → Whisper 转写 → 系统输入
+M0: Bring `Kory Whisper` under the governance-only Harness baseline while tracking small approved product loops through spec + plan + evidence.
 
-### 进度
+## Done
 
-| 模块 | 状态 |
-|------|------|
-| 核心语音输入 | ✅ 完成 |
-| 应用打包 (DMG) | ✅ 完成 |
-| Windows 移植 (Phase 1-3) | ✅ 完成 |
-| 本地 LLM 后处理 | 🔄 开发中 (llama-server 方案已实现，待测试) |
-| 代码签名 | ⬜ 待处理 |
+- Existing repository migrated onto the Harness bootstrap skeleton
+- Root governance docs and repository map established
+- Superpowers templates added under `docs/superpowers/templates/`
+- Bootstrap manifest created at `.harness/bootstrap.toml`
+- Approved and implemented manual clipboard output loop:
+  spec `docs/superpowers/specs/2026-03-23-manual-clipboard-output-design.md`
+  plan `docs/superpowers/plans/2026-03-23-manual-clipboard-output.md`
+  evidence `artifacts/manual-clipboard-output/node-test.txt`
 
-### 文档
-- 闭环设计: `.plan/local_llm_postprocess.md`
-- 经验记录: `MEMORY.md`
-- 下一步: `NEXT_STEP.md`
+## In Progress
 
-### 技术栈
-- Electron + Node.js
-- whisper.cpp + llama.cpp
-- sox（音频录制）
-- AppleScript（系统输入）
+- Align legacy project context with the new governance docs
+- Re-express the next larger product loop from legacy `.plan/` notes into approved Superpowers specs/plans
+
+## Pending
+
+- Re-express active implementation work from legacy `.plan/` notes into the approved Superpowers flow
+- Declare stronger repository validation/invariant rules as the testing surface matures
+
+## Product Snapshot
+
+- Platform focus: macOS desktop voice input via Electron
+- Core path: audio capture -> Whisper transcription -> optional post-process -> clipboard copy for manual paste
+- Current unfinished product thread: local LLM post-processing path has implementation notes in `.plan/local_llm_postprocess.md` but has not yet been re-approved as the next Harness-tracked scope

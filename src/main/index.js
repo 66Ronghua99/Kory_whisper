@@ -216,7 +216,7 @@ class KoryWhisperApp {
         logger.info('[Main] Transcribed:', text);
 
         if (text && text.trim()) {
-          // 模拟键盘输入
+          // 复制到剪贴板，等待用户手动粘贴
           await this.inputSimulator.typeText(text);
           this.trayManager.showSuccessState();
         } else {

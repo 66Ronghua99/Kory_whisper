@@ -1,5 +1,13 @@
 # Kory Whisper - 经验记录
 
+## Governance Notes
+- Harness bootstrap source of truth: `.harness/bootstrap.toml`
+- Repository routing entry: `AGENT_INDEX.md`
+- Canonical progress tracker: `PROGRESS.md`
+- `NEXT_STEP.md` should always point to one directly executable next action
+- Existing historical implementation notes remain in `.plan/` until they are superseded by approved Superpowers specs/plans
+- Manual validation evidence should accumulate under `artifacts/`
+
 ## 开发环境
 - macOS (Apple Silicon)
 - Node.js 18+
@@ -140,3 +148,19 @@ macOS 需要以下权限：
 **调优建议**:
 - 追求速度：保持关闭，或设置 `timeoutMs <= 1000`、`minChars >= 24`。
 - 追求质量：开启后可尝试 `gpt-4o-mini`，`timeoutMs 1200~1800`，并配合 `replacements` 词表映射。
+
+### 2026-03-23 输出阶段改为“仅复制到剪贴板”
+**现象**: 自动模拟 `Cmd+V` 在 macOS 上容易受焦点、权限和目标应用状态影响，成功率不如手动粘贴稳定。
+
+**原因**:
+1. 旧实现会先覆盖剪贴板，再马上发送粘贴快捷键。
+2. 粘贴后 100ms 还会恢复旧剪贴板，使“我稍后再手动粘贴”这个需求无法成立。
+
+**解决方案**:
+1. 将输出阶段收敛为 clipboard-only：只保留处理后的文本到当前系统剪贴板。
+2. 不再在输出阶段读取旧剪贴板、模拟粘贴、恢复旧内容。
+3. 托盘成功态改为“已复制到剪贴板，请手动粘贴”，避免用户以为已经自动输入。
+
+**验证**:
+- `node --test tests/input-simulator-darwin.test.js`
+- 证据文件: `artifacts/manual-clipboard-output/node-test.txt`

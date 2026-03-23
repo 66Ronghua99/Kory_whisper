@@ -99,7 +99,7 @@ class TrayManager extends EventEmitter {
       idle: '就绪',
       recording: '录音中...',
       processing: '识别中...',
-      success: '完成',
+      success: '已复制到剪贴板',
       error: '错误'
     };
     return labels[this.currentState] || '未知';
@@ -152,7 +152,7 @@ class TrayManager extends EventEmitter {
       idle: { title: '', tooltip: 'Kory Whisper - 长按右 ⌘ 语音输入' },
       recording: { title: '●', tooltip: 'Kory Whisper - 录音中...' },
       processing: { title: '…', tooltip: 'Kory Whisper - 识别中...' },
-      success: { title: '✓', tooltip: 'Kory Whisper - 输入完成' },
+      success: { title: '✓', tooltip: 'Kory Whisper - 已复制到剪贴板，请手动粘贴' },
       error: { title: '!', tooltip: 'Kory Whisper - 出错了' }
     };
 
