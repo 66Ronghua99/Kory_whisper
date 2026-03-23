@@ -103,7 +103,7 @@ class KoryWhisperApp {
       appendSpace: config.input?.appendSpace !== false
     });
 
-    this.audioCuePlayer = platform.getAudioCuePlayer();
+    this.audioCuePlayer = platform.getAudioCuePlayer(config.audioCues || {});
 
     // 初始化托盘（在快捷键之前，确保有 UI 反馈）
     logger.info('[Main] Initializing tray manager...');
@@ -469,6 +469,10 @@ class KoryWhisperApp {
 
     if (this.inputSimulator) {
       this.inputSimulator.appendSpace = config.input?.appendSpace !== false;
+    }
+
+    if (this.audioCuePlayer && typeof this.audioCuePlayer.updateOptions === 'function') {
+      this.audioCuePlayer.updateOptions(config.audioCues || {});
     }
   }
 

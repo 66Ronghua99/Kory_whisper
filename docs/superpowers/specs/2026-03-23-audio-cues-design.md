@@ -15,6 +15,8 @@ Kory Whisper currently relies on tray state alone to communicate workflow progre
 
 - Starting a recording plays an audible macOS system cue once recording has actually started.
 - Successful output delivery plays an audible macOS system cue once the final text handoff is complete.
+- Audio cues default to `Tink` for recording start and `Glass` for output ready.
+- Users can enable or disable cues and choose supported sound names from settings.
 - The main workflow calls a platform-neutral audio cue interface and does not branch on platform details.
 - Windows keeps a compatible adapter surface even if cue playback remains a no-op for now.
 
@@ -22,6 +24,7 @@ Kory Whisper currently relies on tray state alone to communicate workflow progre
 
 - Adding a processing-phase sound.
 - Choosing final Windows cue behavior.
+- Free-form custom sound paths or arbitrary user-entered sound names.
 - Redesigning the broader feedback system beyond the two requested cue points.
 
 ## Critical Paths
@@ -35,6 +38,7 @@ Kory Whisper currently relies on tray state alone to communicate workflow progre
 - `platform.getAudioCuePlayer()` returns an object with platform-neutral cue methods for workflow use.
 - Main-process workflow code triggers cue playback only after recording start succeeds and after final text delivery succeeds.
 - macOS cue playback uses built-in system behavior and surfaces real playback failures to logs without crashing the main workflow.
+- Cue configuration lives under `audioCues` in saved config and exposes only supported sound names.
 - Windows exposes the same cue methods through a dedicated adapter, even if the current implementation is a no-op.
 
 ## Architecture Invariants
@@ -53,6 +57,7 @@ Kory Whisper currently relies on tray state alone to communicate workflow progre
 <!-- drift_anchor: acceptance -->
 
 - A focused regression test proves the macOS adapter runs the expected system cue command for both supported cue methods.
+- A focused regression test proves default config values are `Tink` and `Glass`.
 - A focused regression test proves the Windows adapter exposes the same cue methods without requiring platform-specific behavior from callers.
 - Fresh verification confirms the focused audio cue tests pass after implementation.
 

@@ -14,6 +14,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 ## In Progress
 
 - Integrated test branch combines platform audio cues with the shared Whisper model store
+- Audio cues now expose configurable defaults and settings controls on top of the integrated branch
 - Manual macOS smoke validation remains the next gate before broader branch integration
 
 ## Pending
@@ -27,5 +28,6 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 - Core path: audio capture -> Whisper transcription -> optional post-process -> simulated text input
 - Integration test focus on this branch:
   - macOS start/output system cue playback
+  - configurable default sounds (`Tink` + `Glass`) via settings
   - shared Whisper models under `~/.kory-whisper/models/`
   - no duplicate model download when changing worktrees

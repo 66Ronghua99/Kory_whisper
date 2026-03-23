@@ -12,9 +12,9 @@ related: []
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add audible recording-start and output-ready cues behind a platform-neutral adapter contract.
+**Goal:** Add audible recording-start and output-ready cues behind a platform-neutral adapter contract, with configurable defaults exposed in settings.
 
-**Architecture:** Introduce an `AudioCuePlayer` adapter surface inside `src/main/platform/`, with a real macOS implementation and a Windows-compatible no-op implementation. Keep workflow orchestration in `src/main/index.js` platform-agnostic by resolving the adapter from the platform layer once during startup.
+**Architecture:** Introduce an `AudioCuePlayer` adapter surface inside `src/main/platform/`, with a real macOS implementation and a Windows-compatible no-op implementation. Keep workflow orchestration in `src/main/index.js` platform-agnostic by resolving the adapter from the platform layer once during startup, and store cue preferences under `audioCues` so the renderer settings UI and main process share one config contract.
 
 **Tech Stack:** Electron main process, Node.js `child_process`, Node.js built-in test runner
 
@@ -36,6 +36,8 @@ related: []
 - Create: `src/main/platform/audio-cues-win32.js`
 - Modify: `src/main/platform/index.js`
 - Modify: `src/main/index.js`
+- Modify: `src/main/config-manager.js`
+- Modify: `src/renderer/settings.html`
 - Create: `tests/audio-cues.test.js`
 - Update: `Progress.md`
 - Update: `Memory.md`
@@ -64,7 +66,16 @@ related: []
 - [x] Run `node --test tests/audio-cues.test.js` again
 - [x] Run `node --check src/main/index.js && node --check src/main/platform/index.js && node --check src/main/platform/audio-cues-darwin.js && node --check src/main/platform/audio-cues-win32.js`
 
-### Task 4: Sync repository state docs
+### Task 4: Add configurable defaults and settings controls
+
+- [x] Extend config defaults with `audioCues.enabled`, `audioCues.recordingStartSound`, and `audioCues.outputReadySound`
+- [x] Update the macOS adapter to play supported sound names instead of generic `beep`
+- [x] Wire runtime config updates so changed sound selections take effect without platform logic leaking upward
+- [x] Add settings UI controls for the cue toggle and two sound selectors
+- [x] Run `node --test tests/*.test.js`
+- [x] Run `node --check src/main/index.js && node --check src/main/config-manager.js && node --check src/main/platform/index.js && node --check src/main/platform/audio-cues-darwin.js && node --check src/main/platform/audio-cues-win32.js && node --check src/main/model-paths.js && node --check src/main/model-downloader.js`
+
+### Task 5: Sync repository state docs
 
 - [x] Update `Progress.md` with the active audio-cues loop
 - [x] Update `Memory.md` with the new platform-boundary rule for audio cues

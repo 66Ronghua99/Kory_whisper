@@ -100,6 +100,11 @@ class ConfigManager {
         sampleRate: 16000,
         device: 'default'
       },
+      audioCues: {
+        enabled: true,
+        recordingStartSound: 'Tink',
+        outputReadySound: 'Glass'
+      },
       whisper: {
         model: 'base',
         modelPath: getSharedModelPath('ggml-base.bin'),

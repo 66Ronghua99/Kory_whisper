@@ -164,3 +164,16 @@ macOS 需要以下权限：
 1. 在 `src/main/platform/` 下新增独立 adapter，而不是把平台判断写回 `src/main/index.js`。
 2. 上层只调用统一接口，如 `playRecordingStart()`、`playOutputReady()`。
 3. macOS 当前可用 `osascript -e "beep"` 播放系统提示音；Windows 先保留同接口 no-op 实现，等后续再接原生声音 API。
+
+### 2026-03-23 Audio cues 默认音与设置
+**默认值**:
+1. 开始录音：`Tink`
+2. 输出完成：`Glass`
+
+**配置约束**:
+1. 用 `audioCues.enabled`、`audioCues.recordingStartSound`、`audioCues.outputReadySound` 表达设置
+2. 设置页只暴露受支持的固定声音名，不允许自由输入系统路径
+
+**实现说明**:
+1. macOS adapter 直接播放 `/System/Library/Sounds/<name>.aiff`
+2. Windows 先保留同样配置接口，后续再映射到 Windows 原生系统声音
