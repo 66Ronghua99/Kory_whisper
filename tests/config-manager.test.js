@@ -5,6 +5,81 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ConfigManager = require('../src/main/config-manager.js');
+const CanonicalConfigManager = require('../src/main/config/config-manager.js');
+const { createConfigDefaults } = require('../src/main/config/config-defaults.js');
+const {
+  resolveConfigProfileDefaults
+} = require('../src/main/config/config-profile-defaults.js');
+
+test('top-level config manager stays as a compatibility shim for the canonical config home', () => {
+  assert.equal(ConfigManager, CanonicalConfigManager);
+});
+
+test('base config defaults stay platform-neutral until profile defaults are applied', () => {
+  const defaults = createConfigDefaults({
+    homeDir: '/tmp/kory-home',
+    vocabPath: '/tmp/kory-home/vocabulary.json'
+  });
+
+  assert.equal(defaults.shortcut.key, undefined);
+  assert.equal(defaults.input.method, undefined);
+  assert.equal(defaults.shortcut.longPressDuration, 500);
+  assert.equal(defaults.audioCues.recordingStartSound, 'Tink');
+  assert.equal(defaults.whisper.modelPath, '/tmp/kory-home/.kory-whisper/models/ggml-base.bin');
+  assert.equal(defaults.vocabulary.path, '/tmp/kory-home/vocabulary.json');
+});
+
+test('canonical config manager merges platform profile defaults without changing the persisted config shape', () => {
+  const darwinConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'darwin',
+      homeDir: '/tmp/kory-darwin'
+    }
+  });
+
+  const win32ConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'win32',
+      homeDir: 'C:\\Users\\tester'
+    }
+  });
+
+  const darwinDefaults = darwinConfigManager.getDefaultConfig();
+  const win32Defaults = win32ConfigManager.getDefaultConfig();
+
+  assert.equal(darwinDefaults.shortcut.key, 'RIGHT COMMAND');
+  assert.equal(darwinDefaults.input.method, 'applescript');
+  assert.equal(win32Defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(win32Defaults.input.method, 'clipboard');
+  assert.equal(win32Defaults.shortcut.enabled, true);
+  assert.equal(win32Defaults.audioCues.outputReadySound, 'Glass');
+  assert.deepEqual(Object.keys(win32Defaults).sort(), Object.keys(darwinDefaults).sort());
+});
+
+test('profile defaults can come from explicit profile input instead of hard-coded platform branches', () => {
+  const defaults = resolveConfigProfileDefaults({
+    runtimeEnv: { platform: 'darwin' },
+    profile: {
+      configDefaults: {
+        shortcut: {
+          key: 'F13'
+        },
+        input: {
+          method: 'clipboard'
+        }
+      }
+    }
+  });
+
+  assert.deepEqual(defaults, {
+    shortcut: {
+      key: 'F13'
+    },
+    input: {
+      method: 'clipboard'
+    }
+  });
+});
 
 test('config manager merges nested overrides without dropping defaults', () => {
   const configManager = new ConfigManager();
