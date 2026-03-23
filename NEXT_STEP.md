@@ -1,5 +1,7 @@
 # Next Step
 
-Write the next approved spec under `docs/superpowers/specs/` using `docs/superpowers/templates/SPEC_TEMPLATE.md`.
+Run one manual macOS smoke test of the new clipboard-only delivery path in the app:
 
-Recommended first scope: convert the legacy local LLM post-process work in `.plan/local_llm_postprocess.md` into a fresh approved spec before any further implementation or testing changes.
+1. Hold the shortcut and speak a short phrase.
+2. Confirm the tray success state says the text was copied to the clipboard.
+3. Paste manually with `Command-V` in a target app and confirm the latest transcription is still in the clipboard.

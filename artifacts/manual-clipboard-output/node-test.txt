@@ -1,0 +1,21 @@
+TAP version 13
+# [Input] Text copied to clipboard: 你好世界 
+# Subtest: deliverTextToClipboard copies processed text without reading previous clipboard content
+ok 1 - deliverTextToClipboard copies processed text without reading previous clipboard content
+  ---
+  duration_ms: 1.103084
+  ...
+# Subtest: deliverTextToClipboard skips empty text without touching the clipboard
+ok 2 - deliverTextToClipboard skips empty text without touching the clipboard
+  ---
+  duration_ms: 0.085334
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 71.861958

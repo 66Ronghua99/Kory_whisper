@@ -7,6 +7,7 @@
 
 const { exec } = require('child_process');
 const { clipboard } = require('electron');
+const { deliverTextToClipboard } = require('./clipboard-output');
 
 class InputSimulatorDarwin {
   constructor(options = {}) {
@@ -15,19 +16,10 @@ class InputSimulatorDarwin {
   }
 
   async typeText(text) {
-    if (!text || !text.trim()) {
-      return;
-    }
-
-    let processedText = text.trim();
-
-    if (this.appendSpace && !processedText.endsWith(' ') && !processedText.endsWith('。')) {
-      processedText += ' ';
-    }
-
-    console.log('[Input] Typing text:', processedText);
-
-    await this.pasteText(processedText);
+    await deliverTextToClipboard(text, {
+      appendSpace: this.appendSpace,
+      clipboard
+    });
   }
 
   async typeViaAppleScript(text) {
