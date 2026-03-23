@@ -28,7 +28,12 @@ async function announceOutputReady({
   playCueInBackground(() => audioCuePlayer.playOutputReady(), onAudioCueError);
 }
 
+const beginRecordingFeedback = startRecordingFeedback;
+const announceSuccessfulDictation = announceOutputReady;
+
 module.exports = {
+  announceSuccessfulDictation,
   startRecordingFeedback,
-  announceOutputReady
+  announceOutputReady,
+  beginRecordingFeedback
 };

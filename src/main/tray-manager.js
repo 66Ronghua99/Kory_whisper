@@ -197,6 +197,21 @@ class TrayManager extends EventEmitter {
       this.settingsWindow = null;
     });
   }
+
+  destroy() {
+    this.clearResetTimer();
+
+    if (this.settingsWindow && !this.settingsWindow.isDestroyed()) {
+      this.settingsWindow.close();
+    }
+
+    if (this.tray && typeof this.tray.destroy === 'function') {
+      this.tray.destroy();
+    }
+
+    this.settingsWindow = null;
+    this.tray = null;
+  }
 }
 
 module.exports = TrayManager;
