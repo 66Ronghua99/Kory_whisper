@@ -1,5 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { EventEmitter } = require('events');
 
 const platform = require('../src/main/platform/index.js');
 const darwinProfile = require('../src/main/platform/profiles/darwin-profile.js');
@@ -54,6 +58,13 @@ test('platform entrypoint resolves the win32 profile, adapter family, and capabi
   });
 });
 
+test('platform entrypoint fails fast on unsupported platforms instead of mixing identities', () => {
+  assert.throws(
+    () => platform.createPlatformApi({ platform: 'linux' }),
+    /Unsupported platform: linux/
+  );
+});
+
 test('platform selector returns adapter instances with the expected public methods', () => {
   const audioCuePlayer = platform.getAudioCuePlayer({ enabled: false });
   const inputSimulator = platform.getInputSimulator({ appendSpace: true });
@@ -75,4 +86,30 @@ test('platform selector returns adapter instances with the expected public metho
   assert.equal(typeof permissionGateway.check, 'function');
   assert.equal(typeof permissionGateway.ensure, 'function');
   assert.equal(typeof permissionGateway.openSettings, 'function');
+});
+
+test('win32 audio recorder stop resolves even when stdin is unavailable', async () => {
+  const recorder = new Win32AudioRecorder();
+  const outputPath = path.join(os.tmpdir(), `kory-whisper-win32-stop-${process.pid}-${Date.now()}.wav`);
+  fs.writeFileSync(outputPath, 'wav');
+
+  const fakeProcess = new EventEmitter();
+  fakeProcess.stdin = null;
+  fakeProcess.killed = false;
+  fakeProcess.kill = () => {
+    fakeProcess.killed = true;
+  };
+
+  recorder.outputPath = outputPath;
+  recorder.ffmpegProcess = fakeProcess;
+
+  const stopPromise = recorder.stop();
+  setImmediate(() => {
+    fakeProcess.emit('close', 0);
+  });
+
+  const resolvedPath = await stopPromise;
+  assert.equal(resolvedPath, outputPath);
+
+  fs.unlinkSync(outputPath);
 });

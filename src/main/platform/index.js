@@ -33,10 +33,14 @@ const PLATFORM_REGISTRY = Object.freeze({
   })
 });
 
-const DEFAULT_PLATFORM_ID = 'darwin';
-
 function resolvePlatform(platformName = process.platform) {
-  const resolvedPlatform = PLATFORM_REGISTRY[platformName] ? platformName : DEFAULT_PLATFORM_ID;
+  if (!PLATFORM_REGISTRY[platformName]) {
+    throw new Error(
+      `Unsupported platform: ${platformName}. Supported platforms: ${Object.keys(PLATFORM_REGISTRY).join(', ')}`
+    );
+  }
+
+  const resolvedPlatform = platformName;
   return {
     requestedPlatform: platformName,
     resolvedPlatform,

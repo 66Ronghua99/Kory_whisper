@@ -86,7 +86,7 @@ class AudioRecorderWin32 {
         let stderrBuffer = '';
 
         this.ffmpegProcess = spawn(ffmpegBinary, args, {
-          stdio: ['ignore', 'pipe', 'pipe'],
+          stdio: ['pipe', 'pipe', 'pipe'],
           env,
           windowsHide: true
         });
@@ -145,9 +145,20 @@ class AudioRecorderWin32 {
       const ffmpegProcess = this.ffmpegProcess;
       this.ffmpegProcess = null;
 
-      ffmpegProcess.stdin.write('q');
+      if (ffmpegProcess.stdin && typeof ffmpegProcess.stdin.write === 'function') {
+        ffmpegProcess.stdin.write('q');
+      } else {
+        ffmpegProcess.kill('SIGTERM');
+      }
+
+      const forceKillTimer = setTimeout(() => {
+        if (!ffmpegProcess.killed) {
+          ffmpegProcess.kill('SIGTERM');
+        }
+      }, 2000);
 
       ffmpegProcess.on('close', () => {
+        clearTimeout(forceKillTimer);
         if (fs.existsSync(this.outputPath)) {
           resolve(this.outputPath);
           return;
@@ -155,12 +166,6 @@ class AudioRecorderWin32 {
 
         reject(new Error('Output file not created'));
       });
-
-      setTimeout(() => {
-        if (!ffmpegProcess.killed) {
-          ffmpegProcess.kill('SIGTERM');
-        }
-      }, 2000);
     });
   }
 }
