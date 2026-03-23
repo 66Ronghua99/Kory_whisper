@@ -1,0 +1,28 @@
+bootstrap_version = "0.2.0"
+mode = "migration"
+preset = "none"
+entry_skill = "harness:init"
+governance_model = "harness-governance-only.v1"
+templates_dir = "docs/superpowers/templates"
+doc_health_skill = "harness:doc-health"
+lint_test_skill = "harness:lint-test-design"
+
+[governance.refactor_gate]
+enabled = false
+trigger = "commit"
+mode = "review"
+subagent_first = true
+path_rules = []
+artifact_dir = "artifacts/refactor-gate"
+
+[governance.lint_test_route]
+preferred = true
+intents = [
+  "lint design",
+  "test design",
+  "invariant design",
+  "guardrail design",
+  "coverage policy",
+  "naming rules",
+  "file-role rules",
+]

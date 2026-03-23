@@ -1,5 +1,13 @@
 # Kory Whisper - 经验记录
 
+## Governance Notes
+- Harness bootstrap source of truth: `.harness/bootstrap.toml`
+- Repository routing entry: `AGENT_INDEX.md`
+- Canonical progress tracker: `PROGRESS.md`
+- `NEXT_STEP.md` should always point to one directly executable next action
+- Existing historical implementation notes remain in `.plan/` until they are superseded by approved Superpowers specs/plans
+- Manual validation evidence should accumulate under `artifacts/`
+
 ## 开发环境
 - macOS (Apple Silicon)
 - Node.js 18+
@@ -12,7 +20,7 @@
 2024-03-04: 默认快捷键从 F13 改为 **右 Command (RIGHT COMMAND)**
 - 原因: MacBook 没有 F13 键
 - 可用选项: RIGHT COMMAND, LEFT COMMAND, RIGHT OPTION, LEFT OPTION, RIGHT CTRL, F13-F15
-- node-global-key-listener 使用的键名需要大写
+- `uiohook-napi` 的底层 keycode 由 `ShortcutManager.mapKeyToCode()` 统一映射
 
 ### 权限问题
 macOS 需要以下权限：
