@@ -8,7 +8,6 @@
  */
 
 const { app, ipcMain, dialog } = require('electron');
-const path = require('path');
 const logger = require('./logger');
 const ShortcutManager = require('./shortcut-manager');
 const platform = require('./platform');
@@ -21,12 +20,8 @@ const {
   startRecordingFeedback,
   announceOutputReady
 } = require('./dictation-feedback');
-const {
-  getSharedAppDir,
-  getSharedModelsDir,
-  getSharedModelPath,
-  getBundledModelPath
-} = require('./model-paths');
+const { createRuntimeEnv } = require('./runtime/runtime-env');
+const { createRuntimePaths } = require('./runtime/runtime-paths');
 
 class KoryWhisperApp {
   constructor() {
@@ -39,26 +34,30 @@ class KoryWhisperApp {
     this.audioCuePlayer = null;
     this.trayManager = null;
     this.isRecording = false;
+    this.runtimeEnv = null;
+    this.runtimePaths = null;
   }
 
   async init() {
+    this.runtimeEnv = createRuntimeEnv({ app });
+    this.runtimePaths = createRuntimePaths({ runtimeEnv: this.runtimeEnv });
     // 初始化日志
     await logger.init();
     logger.info('[Main] ==================== Kory Whisper Starting ====================');
     logger.info('[Main] App version:', app.getVersion());
     logger.info('[Main] Electron version:', process.versions.electron);
     logger.info('[Main] Node version:', process.versions.node);
-    logger.info('[Main] Platform:', process.platform, process.arch);
-    logger.info('[Main] Is packaged:', app.isPackaged);
-    logger.info('[Main] App path:', app.getAppPath());
-    logger.info('[Main] Resources path:', process.resourcesPath);
+    logger.info('[Main] Platform:', this.runtimeEnv.platform, this.runtimeEnv.arch);
+    logger.info('[Main] Is packaged:', this.runtimeEnv.isPackaged);
+    logger.info('[Main] App path:', this.runtimeEnv.appPath);
+    logger.info('[Main] Resources path:', this.runtimeEnv.resourcesPath);
 
     // 等待应用就绪
     await app.whenReady();
     logger.info('[Main] App is ready');
 
     // 隐藏 Dock 图标（仅菜单栏应用）
-    if (process.platform === 'darwin') {
+    if (this.runtimeEnv.platform === 'darwin') {
       app.dock.hide();
       logger.info('[Main] Dock icon hidden');
     }
@@ -86,8 +85,8 @@ class KoryWhisperApp {
     logger.info('[Main] Model is ready:', modelName);
 
     // 获取正确的模型路径（打包后路径不同）
-    const modelPath = path.join(this.getModelsDir(), modelName);
-    const debugCaptureDir = path.join(getSharedAppDir(), 'debug-captures');
+    const modelPath = this.runtimePaths.getSharedModelPath(modelName);
+    const debugCaptureDir = this.runtimePaths.sharedDebugCapturesDir;
     const debugCaptureStore = new DebugCaptureStore(debugCaptureDir, {
       onError: (message, error) => logger.error('[DebugCaptureStore]', message, error)
     });
@@ -258,15 +257,11 @@ class KoryWhisperApp {
   }
 
   getWhisperBinPath() {
-    const isPackaged = app.isPackaged;
-    if (isPackaged) {
-      return path.join(process.resourcesPath, 'bin', 'whisper-cli');
-    }
-    return path.join(__dirname, '../../bin/whisper-cli');
+    return this.runtimePaths.whisperBinPath;
   }
 
   getModelsDir() {
-    return getSharedModelsDir();
+    return this.runtimePaths.sharedModelsDir;
   }
 
   resolveModelKey(model) {
@@ -302,10 +297,7 @@ class KoryWhisperApp {
       return true;
     }
 
-    const bundledModelPath = getBundledModelPath(modelName, {
-      isPackaged: app.isPackaged,
-      resourcesPath: process.resourcesPath
-    });
+    const bundledModelPath = this.runtimePaths.getBundledModelPath(modelName);
     const seededModel = await this.modelDownloader.seedModelFromPath(bundledModelPath, modelName);
     if (seededModel.copied && seededModel.size > minSize) {
       console.log('[Main] Seeded shared model from bundled resources:', seededModel.path);
@@ -457,7 +449,7 @@ class KoryWhisperApp {
   async applyRuntimeConfig(config) {
     const modelKey = this.resolveModelKey(config.whisper?.model);
     const modelName = this.getModelFilename(modelKey);
-    const modelPath = getSharedModelPath(modelName);
+    const modelPath = this.runtimePaths.getSharedModelPath(modelName);
 
     if (config.whisper) {
       config.whisper.model = modelKey;

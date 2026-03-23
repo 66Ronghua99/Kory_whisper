@@ -38,3 +38,22 @@ test('packaged runs expose a bundled seed path while development runs do not', (
     '/Applications/Kory Whisper.app/Contents/Resources/models/ggml-base.bin'
   );
 });
+
+test('model path helpers fail fast when modelName is undefined', () => {
+  assert.throws(
+    () => getSharedModelPath(undefined, { homeDir: '/Users/tester' }),
+    {
+      name: 'TypeError'
+    }
+  );
+
+  assert.throws(
+    () => getBundledModelPath(undefined, {
+      isPackaged: true,
+      resourcesPath: '/Applications/Kory Whisper.app/Contents/Resources'
+    }),
+    {
+      name: 'TypeError'
+    }
+  );
+});
