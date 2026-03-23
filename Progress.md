@@ -1,28 +1,22 @@
 # Kory Whisper - 项目进度
 
-## 当前状态：本地 LLM 后处理开发中
+## 当前状态：Audio cues 平台抽象已落地，待 macOS 实机验证
 
 ### 项目阶段
 - **平台**: macOS (主), Windows (待移植)
-- **核心功能**: 语音输入 → Whisper 转写 → 系统输入
+- **核心功能**: 语音输入 → Whisper 转写 → 输出交付
 
-### 进度
+### 本次闭环
+- 新增 `docs/superpowers/specs/2026-03-23-audio-cues-design.md`
+- 新增 `docs/superpowers/plans/2026-03-23-audio-cues.md`
+- 新增平台无关 `AudioCuePlayer` 调用面
+- macOS 已接入系统提示音实现
+- Windows 已补齐同接口占位 adapter
+- 主流程已在“录音开始成功后”和“最终输出完成后”接入提示音
 
-| 模块 | 状态 |
-|------|------|
-| 核心语音输入 | ✅ 完成 |
-| 应用打包 (DMG) | ✅ 完成 |
-| Windows 移植 (Phase 1-3) | ✅ 完成 |
-| 本地 LLM 后处理 | 🔄 开发中 (llama-server 方案已实现，待测试) |
-| 代码签名 | ⬜ 待处理 |
+### 验证证据
+- `artifacts/audio-cues/verification-2026-03-23.md`
 
-### 文档
-- 闭环设计: `.plan/local_llm_postprocess.md`
-- 经验记录: `MEMORY.md`
-- 下一步: `NEXT_STEP.md`
-
-### 技术栈
-- Electron + Node.js
-- whisper.cpp + llama.cpp
-- sox（音频录制）
-- AppleScript（系统输入）
+### 并行工作说明
+- 本分支不包含 clipboard-only 输出模式改动
+- clipboard 交付行为应继续在独立 worktree / branch 中推进

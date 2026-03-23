@@ -25,6 +25,7 @@ class KoryWhisperApp {
     this.audioRecorder = null;
     this.whisperEngine = null;
     this.inputSimulator = null;
+    this.audioCuePlayer = null;
     this.trayManager = null;
     this.isRecording = false;
   }
@@ -96,6 +97,8 @@ class KoryWhisperApp {
     this.inputSimulator = platform.getInputSimulator({
       appendSpace: config.input?.appendSpace !== false
     });
+
+    this.audioCuePlayer = platform.getAudioCuePlayer();
 
     // 初始化托盘（在快捷键之前，确保有 UI 反馈）
     logger.info('[Main] Initializing tray manager...');
@@ -180,6 +183,7 @@ class KoryWhisperApp {
 
       try {
         await this.audioRecorder.start();
+        await this.audioCuePlayer.playRecordingStart();
       } catch (error) {
         logger.error('[Main] Failed to start recording:', error);
         this.isRecording = false;
@@ -218,6 +222,7 @@ class KoryWhisperApp {
         if (text && text.trim()) {
           // 模拟键盘输入
           await this.inputSimulator.typeText(text);
+          await this.audioCuePlayer.playOutputReady();
           this.trayManager.showSuccessState();
         } else {
           this.trayManager.showErrorState('未识别到语音');

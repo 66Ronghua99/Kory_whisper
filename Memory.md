@@ -140,3 +140,15 @@ macOS 需要以下权限：
 **调优建议**:
 - 追求速度：保持关闭，或设置 `timeoutMs <= 1000`、`minChars >= 24`。
 - 追求质量：开启后可尝试 `gpt-4o-mini`，`timeoutMs 1200~1800`，并配合 `replacements` 词表映射。
+
+### 2026-03-23 Audio cues 平台边界
+**背景**: 录音开始和输出完成需要声音反馈，同时仓库后续要支持 Windows。
+
+**约束**:
+1. 上层 workflow 不应直接判断 `process.platform`。
+2. 提示音能力应和 tray 状态、输出注入逻辑分离。
+
+**实践**:
+1. 在 `src/main/platform/` 下新增独立 adapter，而不是把平台判断写回 `src/main/index.js`。
+2. 上层只调用统一接口，如 `playRecordingStart()`、`playOutputReady()`。
+3. macOS 当前可用 `osascript -e "beep"` 播放系统提示音；Windows 先保留同接口 no-op 实现，等后续再接原生声音 API。
