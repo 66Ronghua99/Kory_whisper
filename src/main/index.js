@@ -18,6 +18,10 @@ const TrayManager = require('./tray-manager');
 const ConfigManager = require('./config-manager');
 const ModelDownloader = require('./model-downloader');
 const {
+  startRecordingFeedback,
+  announceOutputReady
+} = require('./dictation-feedback');
+const {
   getSharedAppDir,
   getSharedModelsDir,
   getSharedModelPath,
@@ -192,11 +196,14 @@ class KoryWhisperApp {
       }
 
       this.isRecording = true;
-      this.trayManager.setRecordingState(true);
 
       try {
-        await this.audioRecorder.start();
-        await this.audioCuePlayer.playRecordingStart();
+        await startRecordingFeedback({
+          audioRecorder: this.audioRecorder,
+          trayManager: this.trayManager,
+          audioCuePlayer: this.audioCuePlayer,
+          onAudioCueError: (error) => logger.error('[Main] Failed to play recording-start cue:', error)
+        });
       } catch (error) {
         logger.error('[Main] Failed to start recording:', error);
         this.isRecording = false;
@@ -235,8 +242,11 @@ class KoryWhisperApp {
         if (text && text.trim()) {
           // 复制到剪贴板，等待用户手动粘贴
           await this.inputSimulator.typeText(text);
-          await this.audioCuePlayer.playOutputReady();
-          this.trayManager.showSuccessState();
+          await announceOutputReady({
+            trayManager: this.trayManager,
+            audioCuePlayer: this.audioCuePlayer,
+            onAudioCueError: (error) => logger.error('[Main] Failed to play output-ready cue:', error)
+          });
         } else {
           this.trayManager.showErrorState('未识别到语音');
         }

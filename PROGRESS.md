@@ -12,6 +12,7 @@ M0: Validate the combined audio-cues and shared-model-store branch before decidi
 - Bootstrap manifest created at `.harness/bootstrap.toml`
 - Whisper transcription now fails fast on child-process errors instead of returning partial `.txt` output as a successful result; verification captured at `artifacts/whisper-engine-partial-output/verify.txt`
 - Whisper debug captures now stay on by default under `~/.kory-whisper/debug-captures/`, preserving the latest three runs with `audio.wav`, optional `raw.txt`, and `meta.json`; verification captured at `artifacts/whisper-debug-captures/verify.txt`
+- Dictation feedback timing now aligns tray state with recording-start success and clipboard-ready success instead of waiting on cue playback; tray reset timers also clear on newer states
 
 ## In Progress
 

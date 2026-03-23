@@ -206,6 +206,17 @@ macOS 需要以下权限：
 1. macOS adapter 直接播放 `/System/Library/Sounds/<name>.aiff`
 2. Windows 先保留同样配置接口，后续再映射到 Windows 原生系统声音
 
+### 2026-03-23 提示音与 tray 状态时序
+**现象**:
+1. 录音开始提示音和 tray `recording` 视觉状态如果由不同阶段触发，用户会感觉“已经开始录了”和“刚开始录”不一致。
+2. 输出完成后如果先等待 `output-ready` 提示音播放结束，再把 tray 切到 `success`，会出现“实际上已经能粘贴，但菜单栏还显示识别中”的错位。
+3. tray 的 success/error 自动复位定时器如果不在新状态进入时清掉，会把下一轮录音或识别状态意外覆盖回 `idle`。
+
+**约束**:
+1. `recording` 视觉状态必须在 `audioRecorder.start()` 真正成功之后再进入。
+2. clipboard-ready / tray `success` 是“文本已经交付”的语义状态，不能被提示音播放时长阻塞。
+3. 新的 tray 状态切换必须清理旧的 success/error 自动复位定时器。
+
 ### 2026-03-23 lint/test hardgate baseline
 **目标**:
 1. 把平台 selector 单点所有权、renderer/runtime 边界、以及当前最容易证明的 config/platform slice 变成可执行门禁

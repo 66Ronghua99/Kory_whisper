@@ -16,6 +16,7 @@ class TrayManager extends EventEmitter {
     this.tray = null;
     this.settingsWindow = null;
     this.currentState = 'idle'; // idle, recording, processing, success, error
+    this.resetTimer = null;
   }
 
   init() {
@@ -105,44 +106,55 @@ class TrayManager extends EventEmitter {
     return labels[this.currentState] || '未知';
   }
 
+  clearResetTimer() {
+    if (!this.resetTimer) {
+      return;
+    }
+
+    clearTimeout(this.resetTimer);
+    this.resetTimer = null;
+  }
+
+  scheduleResetToIdle(delayMs) {
+    this.clearResetTimer();
+    this.resetTimer = setTimeout(() => {
+      this.resetTimer = null;
+      this.currentState = 'idle';
+      this.applyStateVisuals();
+      this.updateContextMenu();
+    }, delayMs);
+  }
+
   setRecordingState(isRecording) {
+    this.clearResetTimer();
     this.currentState = isRecording ? 'recording' : 'idle';
     this.applyStateVisuals();
     this.updateContextMenu();
   }
 
   showProcessingState() {
+    this.clearResetTimer();
     this.currentState = 'processing';
     this.applyStateVisuals();
     this.updateContextMenu();
   }
 
   showSuccessState() {
+    this.clearResetTimer();
     this.currentState = 'success';
     this.applyStateVisuals();
     this.updateContextMenu();
-
-    // 2秒后恢复
-    setTimeout(() => {
-      this.currentState = 'idle';
-      this.applyStateVisuals();
-      this.updateContextMenu();
-    }, 2000);
+    this.scheduleResetToIdle(2000);
   }
 
   showErrorState(message) {
+    this.clearResetTimer();
     this.currentState = 'error';
     this.applyStateVisuals();
     this.updateContextMenu();
 
     console.error('[Tray] Error:', message);
-
-    // 3秒后恢复
-    setTimeout(() => {
-      this.currentState = 'idle';
-      this.applyStateVisuals();
-      this.updateContextMenu();
-    }, 3000);
+    this.scheduleResetToIdle(3000);
   }
 
   applyStateVisuals() {
