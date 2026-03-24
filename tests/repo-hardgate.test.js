@@ -8,9 +8,19 @@ const {
   formatViolations
 } = require('../scripts/repo-hardgate.js');
 
-function readCoverageIncludeSet() {
-  const coverageConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.c8rc.json'), 'utf8'));
-  return coverageConfig.include;
+function writeTempServiceModule(name, source) {
+  const filePath = path.join(__dirname, '..', 'src', 'main', 'services', name);
+  fs.writeFileSync(filePath, source, 'utf8');
+  return filePath;
+}
+
+function withTempServiceModule(name, source, fn) {
+  const filePath = writeTempServiceModule(name, source);
+  try {
+    return fn(filePath);
+  } finally {
+    fs.unlinkSync(filePath);
+  }
 }
 
 test('repo hardgate passes against the current repository state', () => {
@@ -32,35 +42,64 @@ test('repo hardgate formats violations with rule id and remediation detail', () 
   assert.match(output, /Import "\.\/platform" instead\./);
 });
 
-test('repo hardgate rejects direct process.platform branching inside business services', () => {
-  const tempFilePath = path.join(__dirname, '..', 'src', 'main', 'services', '__temp-platform-branch.js');
+test('repo hardgate rejects platform adapter imports outside the selector', () => {
+  withTempServiceModule(
+    '__temp-platform-adapter-import.js',
+    "const recorder = require('../platform/adapters/win32/audio-recorder.js');\nmodule.exports = recorder;\n",
+    () => {
+      const violations = analyzeRepository();
+      const adapterViolation = violations.find((violation) => violation.ruleId === 'LTD-002');
 
-  fs.writeFileSync(
-    tempFilePath,
-    "const platform = process.platform;\nmodule.exports = platform;\n",
-    'utf8'
+      assert.ok(adapterViolation, 'expected a platform-adapter import violation');
+      assert.equal(adapterViolation.file, 'src/main/services/__temp-platform-adapter-import.js');
+      assert.match(adapterViolation.detail, /platform adapters/);
+    }
   );
-
-  try {
-    const violations = analyzeRepository();
-    const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
-
-    assert.ok(serviceViolation, 'expected a service-layer platform branching violation');
-    assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-branch.js');
-    assert.match(serviceViolation.detail, /process\.platform/);
-  } finally {
-    fs.unlinkSync(tempFilePath);
-  }
 });
 
-test('guarded coverage slice names only the stable frozen seams instead of the whole main process', () => {
-  const includeSet = readCoverageIncludeSet();
+test('repo hardgate rejects service-layer platform branching through direct access, destructuring, and bracket access', () => {
+  withTempServiceModule(
+    '__temp-platform-branch.js',
+    "const { platform: runtimePlatform } = process;\nif (runtimePlatform === 'darwin' || process['platform'] === 'win32') {\n  module.exports = runtimePlatform;\n}\n",
+    () => {
+      const violations = analyzeRepository();
+      const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
 
-  assert.equal(includeSet.includes('src/main/app/bootstrap.js'), false);
-  assert.equal(includeSet.includes('src/main/runtime/runtime-env.js'), false);
-  assert.equal(includeSet.includes('src/main/services/dictation-service.js'), false);
-  assert.ok(includeSet.includes('src/main/distribution/distribution-manifest.js'));
-  assert.ok(includeSet.includes('src/main/runtime/runtime-capabilities.js'));
+      assert.ok(serviceViolation, 'expected a service-layer platform branching violation');
+      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-branch.js');
+      assert.match(serviceViolation.detail, /process\.platform/);
+    }
+  );
+});
+
+test('repo hardgate ignores process.platform mentions in comments and strings', () => {
+  withTempServiceModule(
+    '__temp-platform-comment.js',
+    [
+      '// process.platform should not trigger a violation',
+      'const note = "process.platform";',
+      "const label = 'process[\'platform\']';",
+      'module.exports = note + label;'
+    ].join('\n'),
+    () => {
+      const violations = analyzeRepository();
+      assert.equal(
+        violations.some((violation) => violation.file === 'src/main/services/__temp-platform-comment.js'),
+        false
+      );
+    }
+  );
+});
+
+test('guarded coverage slice stays on the stable frozen seams instead of the whole main process', () => {
+  const coverageConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.c8rc.json'), 'utf8'));
+  const includeSet = coverageConfig.include;
+
+  assert.equal(coverageConfig.all, true);
+  assert.ok(includeSet.includes('src/main/config-manager.js'));
   assert.ok(includeSet.includes('src/main/platform/index.js'));
-  assert.equal(includeSet.includes('src/main/index.js'), false);
+  assert.ok(includeSet.includes('src/main/runtime/runtime-capabilities.js'));
+  assert.equal(includeSet.includes('src/main/app/bootstrap.js'), false);
+  assert.equal(includeSet.includes('src/main/services/dictation-service.js'), false);
+  assert.equal(includeSet.includes('src/main/platform/adapters/win32/audio-recorder.js'), false);
 });

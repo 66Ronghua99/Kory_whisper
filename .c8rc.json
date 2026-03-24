@@ -1,5 +1,5 @@
 {
-  "all": false,
+  "all": true,
   "reporter": [
     "text",
     "text-summary"
@@ -25,11 +25,5 @@
     "src/main/runtime/runtime-capabilities.js",
     "src/main/runtime/runtime-paths.js",
     "src/main/shared/model-paths.js"
-  ],
-  "exclude": [
-    "src/main/app/**",
-    "src/main/services/**",
-    "src/main/platform/adapters/**",
-    "src/main/runtime/runtime-env.js"
   ]
 }

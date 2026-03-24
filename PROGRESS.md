@@ -12,8 +12,9 @@ M1: Freeze the Windows runtime decoupling boundary proof and keep the macOS beha
 - Platform profiles and adapters are split under `src/main/platform/`
 - Business-service orchestration now lives in `src/main/services/`
 - The repo hardgate now blocks direct `process.platform` branching inside `src/main/services/`
+- The repo hardgate now blocks direct imports of selector-owned platform adapters outside `src/main/platform/index.js`
 - The guarded coverage slice now stays on the stable seam subset instead of pretending to cover the whole main process
-- Architecture and testing docs now match the new composition/runtime/profile boundaries and the narrower coverage ratchet
+- Architecture and testing docs now match the new composition/runtime/profile boundaries and the tracked markdown evidence format
 
 ## In Progress
 
@@ -32,3 +33,4 @@ M1: Freeze the Windows runtime decoupling boundary proof and keep the macOS beha
 - `src/main/services/` owns dictation workflow orchestration and must stay platform-agnostic
 - `src/main/platform/` owns platform selection, profiles, and OS-specific adapters
 - Guarded coverage remains intentionally narrow and honest
+- Fresh evidence lives in tracked markdown artifacts under `artifacts/windows-runtime-decoupling/`

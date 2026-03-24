@@ -7,7 +7,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const srcRoot = path.join(repoRoot, 'src');
 
 const JS_IMPORT_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)|import\s+(?:.+?\s+from\s+)?['"]([^'"]+)['"]/g;
-const PLATFORM_LEAF_PATTERN = /src\/main\/platform\/.+-(darwin|win32)\.js$/;
+const PLATFORM_ADAPTER_PATTERN = /^src\/main\/platform\/adapters\/.+\.js$/;
 const RENDERER_FORBIDDEN_PATTERNS = [
   {
     id: 'renderer-child-process',
@@ -23,13 +23,6 @@ const RENDERER_FORBIDDEN_PATTERNS = [
     id: 'renderer-whisper-bin',
     pattern: /whisper-cli|\/System\/Library\/Sounds|afplay/,
     message: 'Renderer code must not shell out to bundled binaries or system sounds directly.'
-  }
-];
-const BUSINESS_SERVICE_FORBIDDEN_PATTERNS = [
-  {
-    id: 'business-service-platform-branch',
-    pattern: /process\.platform/,
-    message: 'Business-service modules must resolve runtime platform facts before branching instead of reading process.platform directly.'
   }
 ];
 
@@ -89,6 +82,94 @@ function collectImports(filePath, content) {
   return imports;
 }
 
+function stripCommentsAndStrings(source) {
+  let result = '';
+  let state = 'code';
+  let quote = null;
+
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    const next = source[i + 1];
+
+    if (state === 'code') {
+      if (char === '/' && next === '/') {
+        state = 'line-comment';
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (char === '/' && next === '*') {
+        state = 'block-comment';
+        result += '  ';
+        i += 1;
+        continue;
+      }
+
+      if (char === '"' || char === "'" || char === '`') {
+        state = char === '`' ? 'template' : 'string';
+        quote = char;
+        result += ' ';
+        continue;
+      }
+
+      result += char;
+      continue;
+    }
+
+    if (state === 'line-comment') {
+      if (char === '\n') {
+        state = 'code';
+        result += '\n';
+      } else {
+        result += ' ';
+      }
+      continue;
+    }
+
+    if (state === 'block-comment') {
+      if (char === '*' && next === '/') {
+        state = 'code';
+        result += '  ';
+        i += 1;
+      } else {
+        result += char === '\n' ? '\n' : ' ';
+      }
+      continue;
+    }
+
+    if (state === 'string' || state === 'template') {
+      if (char === '\\') {
+        result += '  ';
+        i += 1;
+        if (i < source.length) {
+          result += source[i] === '\n' ? '\n' : ' ';
+        }
+        continue;
+      }
+
+      if (char === quote) {
+        state = 'code';
+        quote = null;
+        result += ' ';
+        continue;
+      }
+
+      result += char === '\n' ? '\n' : ' ';
+    }
+  }
+
+  return result;
+}
+
+function hasServicePlatformBranch(content) {
+  const stripped = stripCommentsAndStrings(content);
+  const directAccessPattern = /\bprocess\s*(?:\.\s*platform|\[\s*['"]platform['"]\s*\])/;
+  const destructuredPattern = /\b(?:const|let|var)\s*\{[^}]*\bplatform\b[^}]*\}\s*=\s*process\b/;
+
+  return directAccessPattern.test(stripped) || destructuredPattern.test(stripped);
+}
+
 function analyzeRepository() {
   const violations = [];
   const files = listFiles(srcRoot);
@@ -104,29 +185,28 @@ function analyzeRepository() {
       }
 
       const importedRepoPath = toRepoPath(fileImport.resolved);
-      const isPlatformLeaf = PLATFORM_LEAF_PATTERN.test(importedRepoPath);
+      const importsPlatformAdapter = PLATFORM_ADAPTER_PATTERN.test(importedRepoPath);
 
       if (
         repoPath === 'src/main/index.js' &&
-        importedRepoPath.startsWith('src/main/platform/') &&
-        importedRepoPath !== 'src/main/platform/index.js'
+        importedRepoPath.startsWith('src/main/platform/adapters/')
       ) {
         violations.push({
           ruleId: 'LTD-001',
           file: repoPath,
-          detail: `Main entry imports platform leaf "${fileImport.specifier}". Import "./platform" instead.`
+          detail: `Main entry imports platform adapter "${fileImport.specifier}". Import "./platform" instead.`
         });
       }
 
       if (
-        isPlatformLeaf &&
+        importsPlatformAdapter &&
         repoPath !== 'src/main/platform/index.js' &&
         !repoPath.startsWith('tests/')
       ) {
         violations.push({
           ruleId: 'LTD-002',
           file: repoPath,
-          detail: `Only src/main/platform/index.js may import platform leaf "${fileImport.specifier}". Route adapter selection through the platform selector.`
+          detail: `Only src/main/platform/index.js may import platform adapters such as "${fileImport.specifier}". Route adapter selection through the platform selector.`
         });
       }
     }
@@ -143,16 +223,12 @@ function analyzeRepository() {
       }
     }
 
-    if (repoPath.startsWith('src/main/services/')) {
-      for (const check of BUSINESS_SERVICE_FORBIDDEN_PATTERNS) {
-        if (check.pattern.test(content)) {
-          violations.push({
-            ruleId: 'LTD-004',
-            file: repoPath,
-            detail: `${check.id}: ${check.message}`
-          });
-        }
-      }
+    if (repoPath.startsWith('src/main/services/') && hasServicePlatformBranch(content)) {
+      violations.push({
+        ruleId: 'LTD-004',
+        file: repoPath,
+        detail: 'Business-service modules must resolve runtime platform facts before branching instead of reading process.platform directly.'
+      });
     }
   }
 
