@@ -42,31 +42,46 @@ test('repo hardgate formats violations with rule id and remediation detail', () 
   assert.match(output, /Import "\.\/platform" instead\./);
 });
 
-test('repo hardgate rejects platform adapter imports outside the selector', () => {
+test('repo hardgate rejects direct service-layer process.platform access', () => {
   withTempServiceModule(
-    '__temp-platform-adapter-import.js',
-    "const recorder = require('../platform/adapters/win32/audio-recorder.js');\nmodule.exports = recorder;\n",
-    () => {
-      const violations = analyzeRepository();
-      const adapterViolation = violations.find((violation) => violation.ruleId === 'LTD-002');
-
-      assert.ok(adapterViolation, 'expected a platform-adapter import violation');
-      assert.equal(adapterViolation.file, 'src/main/services/__temp-platform-adapter-import.js');
-      assert.match(adapterViolation.detail, /platform adapters/);
-    }
-  );
-});
-
-test('repo hardgate rejects service-layer platform branching through direct access, destructuring, and bracket access', () => {
-  withTempServiceModule(
-    '__temp-platform-branch.js',
-    "const { platform: runtimePlatform } = process;\nif (runtimePlatform === 'darwin' || process['platform'] === 'win32') {\n  module.exports = runtimePlatform;\n}\n",
+    '__temp-platform-dot.js',
+    "if (process.platform === 'darwin') {\n  module.exports = true;\n}\n",
     () => {
       const violations = analyzeRepository();
       const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
 
-      assert.ok(serviceViolation, 'expected a service-layer platform branching violation');
-      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-branch.js');
+      assert.ok(serviceViolation, 'expected a direct service-layer platform violation');
+      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-dot.js');
+      assert.match(serviceViolation.detail, /process\.platform/);
+    }
+  );
+});
+
+test('repo hardgate rejects destructured service-layer platform aliases', () => {
+  withTempServiceModule(
+    '__temp-platform-destructured.js',
+    "const { platform: runtimePlatform } = process;\nmodule.exports = runtimePlatform;\n",
+    () => {
+      const violations = analyzeRepository();
+      const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
+
+      assert.ok(serviceViolation, 'expected a destructured service-layer platform violation');
+      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-destructured.js');
+      assert.match(serviceViolation.detail, /process\.platform/);
+    }
+  );
+});
+
+test('repo hardgate rejects bracket-based service-layer platform access', () => {
+  withTempServiceModule(
+    '__temp-platform-bracket.js',
+    "const runtimePlatform = process['platform'];\nmodule.exports = runtimePlatform;\n",
+    () => {
+      const violations = analyzeRepository();
+      const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
+
+      assert.ok(serviceViolation, 'expected a bracket-access service-layer platform violation');
+      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-bracket.js');
       assert.match(serviceViolation.detail, /process\.platform/);
     }
   );
@@ -87,6 +102,21 @@ test('repo hardgate ignores process.platform mentions in comments and strings', 
         violations.some((violation) => violation.file === 'src/main/services/__temp-platform-comment.js'),
         false
       );
+    }
+  );
+});
+
+test('repo hardgate rejects platform adapter imports outside the selector', () => {
+  withTempServiceModule(
+    '__temp-platform-adapter-import.js',
+    "const recorder = require('../platform/adapters/win32/audio-recorder.js');\nmodule.exports = recorder;\n",
+    () => {
+      const violations = analyzeRepository();
+      const adapterViolation = violations.find((violation) => violation.ruleId === 'LTD-002');
+
+      assert.ok(adapterViolation, 'expected a platform-adapter import violation');
+      assert.equal(adapterViolation.file, 'src/main/services/__temp-platform-adapter-import.js');
+      assert.match(adapterViolation.detail, /platform adapters/);
     }
   );
 });

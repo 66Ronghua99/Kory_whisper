@@ -82,92 +82,124 @@ function collectImports(filePath, content) {
   return imports;
 }
 
-function stripCommentsAndStrings(source) {
-  let result = '';
-  let state = 'code';
-  let quote = null;
+function tokenizeJavaScript(source) {
+  const tokens = [];
+  let i = 0;
 
-  for (let i = 0; i < source.length; i += 1) {
+  while (i < source.length) {
     const char = source[i];
     const next = source[i + 1];
 
-    if (state === 'code') {
-      if (char === '/' && next === '/') {
-        state = 'line-comment';
-        result += '  ';
-        i += 1;
-        continue;
-      }
-
-      if (char === '/' && next === '*') {
-        state = 'block-comment';
-        result += '  ';
-        i += 1;
-        continue;
-      }
-
-      if (char === '"' || char === "'" || char === '`') {
-        state = char === '`' ? 'template' : 'string';
-        quote = char;
-        result += ' ';
-        continue;
-      }
-
-      result += char;
+    if (/\s/.test(char)) {
+      i += 1;
       continue;
     }
 
-    if (state === 'line-comment') {
-      if (char === '\n') {
-        state = 'code';
-        result += '\n';
-      } else {
-        result += ' ';
+    if (char === '/' && next === '/') {
+      i += 2;
+      while (i < source.length && source[i] !== '\n') {
+        i += 1;
       }
       continue;
     }
 
-    if (state === 'block-comment') {
-      if (char === '*' && next === '/') {
-        state = 'code';
-        result += '  ';
-        i += 1;
-      } else {
-        result += char === '\n' ? '\n' : ' ';
-      }
-      continue;
-    }
-
-    if (state === 'string' || state === 'template') {
-      if (char === '\\') {
-        result += '  ';
-        i += 1;
-        if (i < source.length) {
-          result += source[i] === '\n' ? '\n' : ' ';
+    if (char === '/' && next === '*') {
+      i += 2;
+      while (i < source.length) {
+        if (source[i] === '*' && source[i + 1] === '/') {
+          i += 2;
+          break;
         }
-        continue;
+        i += 1;
       }
-
-      if (char === quote) {
-        state = 'code';
-        quote = null;
-        result += ' ';
-        continue;
-      }
-
-      result += char === '\n' ? '\n' : ' ';
+      continue;
     }
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char;
+      let value = '';
+      i += 1;
+
+      while (i < source.length) {
+        const current = source[i];
+        if (current === '\\') {
+          value += current;
+          i += 1;
+          if (i < source.length) {
+            value += source[i];
+            i += 1;
+          }
+          continue;
+        }
+
+        if (current === quote) {
+          i += 1;
+          break;
+        }
+
+        value += current;
+        i += 1;
+      }
+
+      tokens.push({ type: 'string', value });
+      continue;
+    }
+
+    if (/[A-Za-z_$]/.test(char)) {
+      let value = char;
+      i += 1;
+      while (i < source.length && /[A-Za-z0-9_$]/.test(source[i])) {
+        value += source[i];
+        i += 1;
+      }
+      tokens.push({ type: 'identifier', value });
+      continue;
+    }
+
+    tokens.push({ type: 'punctuation', value: char });
+    i += 1;
   }
 
-  return result;
+  return tokens;
 }
 
 function hasServicePlatformBranch(content) {
-  const stripped = stripCommentsAndStrings(content);
-  const directAccessPattern = /\bprocess\s*(?:\.\s*platform|\[\s*['"]platform['"]\s*\])/;
-  const destructuredPattern = /\b(?:const|let|var)\s*\{[^}]*\bplatform\b[^}]*\}\s*=\s*process\b/;
+  const tokens = tokenizeJavaScript(content);
 
-  return directAccessPattern.test(stripped) || destructuredPattern.test(stripped);
+  for (let index = 0; index < tokens.length; index += 1) {
+    const current = tokens[index];
+    const next = tokens[index + 1];
+    const afterNext = tokens[index + 2];
+    const afterAfterNext = tokens[index + 3];
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '.' &&
+      afterNext?.type === 'identifier' && afterNext.value === 'platform'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '[' &&
+      afterNext?.type === 'string' && afterNext.value === 'platform' &&
+      afterAfterNext?.type === 'punctuation' && afterAfterNext.value === ']'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && current.value === 'const' &&
+      next?.type === 'punctuation' && next.value === '{' &&
+      tokens.slice(index + 2).some((token) => token.type === 'identifier' && token.value === 'platform') &&
+      tokens.slice(index + 2).some((token) => token.type === 'identifier' && token.value === 'process')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function analyzeRepository() {
