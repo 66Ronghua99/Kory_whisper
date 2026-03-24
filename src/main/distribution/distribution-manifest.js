@@ -1,29 +1,97 @@
-const DISTRIBUTION_MANIFEST = Object.freeze({
-  bundledBinaries: Object.freeze({
-    'whisper-cli': Object.freeze({
+function freezeClone(value) {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => freezeClone(entry)));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const clone = {};
+  for (const [key, entry] of Object.entries(value)) {
+    clone[key] = freezeClone(entry);
+  }
+  return Object.freeze(clone);
+}
+
+const DISTRIBUTION_MANIFEST = freezeClone({
+  bundledBinaries: {
+    'whisper-cli': {
       id: 'whisper-cli',
       packaged: true,
-      packagedPlatforms: Object.freeze(['darwin']),
-      relativePaths: Object.freeze({
+      packagedPlatforms: ['darwin'],
+      relativePaths: {
         default: 'bin/whisper-cli',
         win32: 'bin/whisper-cli.exe'
-      })
-    })
-  }),
-  packagedAssets: Object.freeze([
-    Object.freeze({ id: 'bin', relativePath: 'bin' }),
-    Object.freeze({ id: 'models', relativePath: 'models' })
-  ])
+      }
+    }
+  },
+  packagedAssets: [
+    {
+      id: 'bin',
+      relativePath: 'bin',
+      packagedPlatforms: ['darwin', 'win32'],
+      builder: {
+        from: 'bin',
+        to: 'bin',
+        filters: {
+          default: ['**/*'],
+          darwin: ['whisper-cli'],
+          win32: ['whisper-cli.exe']
+        }
+      }
+    },
+    {
+      id: 'models',
+      relativePath: 'models',
+      packagedPlatforms: ['darwin'],
+      builder: {
+        from: 'models',
+        to: 'models',
+        filters: {
+          default: ['*.bin']
+        }
+      }
+    }
+  ],
+  installerPrerequisites: {
+    darwin: [
+      {
+        id: 'bundled-whisper-cli',
+        status: 'ready',
+        detail: 'Packaged macOS builds bundle bin/whisper-cli.'
+      }
+    ],
+    win32: [
+      {
+        id: 'bundled-whisper-cli',
+        status: 'pending',
+        detail: 'Add bin/whisper-cli.exe before packaged win32 runtime can declare whisper-cli support.'
+      }
+    ]
+  }
 });
 
-function isPackagedPlatformSupported(binary, platform) {
+function matchesPackagedPlatform(entry, platform) {
   if (!platform) {
     return true;
   }
 
-  return Array.isArray(binary.packagedPlatforms)
-    ? binary.packagedPlatforms.includes(platform)
+  return Array.isArray(entry.packagedPlatforms)
+    ? entry.packagedPlatforms.includes(platform)
     : true;
+}
+
+function cloneEntry(entry) {
+  return JSON.parse(JSON.stringify(entry));
+}
+
+function getBuilderFilter(builderConfig, platform) {
+  if (!builderConfig || !builderConfig.filters) {
+    return ['**/*'];
+  }
+
+  return builderConfig.filters[platform] || builderConfig.filters.default || ['**/*'];
 }
 
 function getBundledBinary(binaryId, runtimeEnv = {}) {
@@ -32,7 +100,7 @@ function getBundledBinary(binaryId, runtimeEnv = {}) {
     throw new Error(`Unknown bundled binary: ${binaryId}`);
   }
 
-  if (runtimeEnv.isPackaged && !isPackagedPlatformSupported(binary, runtimeEnv.platform)) {
+  if (runtimeEnv.isPackaged && !matchesPackagedPlatform(binary, runtimeEnv.platform)) {
     throw new Error(`Packaged binary ${binaryId} is not declared for platform ${runtimeEnv.platform}`);
   }
 
@@ -43,22 +111,43 @@ function getBundledBinary(binaryId, runtimeEnv = {}) {
   };
 }
 
-function getPackagedAsset(assetId) {
+function getPackagedAsset(assetId, runtimeEnv = {}) {
   const asset = DISTRIBUTION_MANIFEST.packagedAssets.find((entry) => entry.id === assetId);
   if (!asset) {
     throw new Error(`Unknown packaged asset: ${assetId}`);
   }
 
-  return { ...asset };
+  if (!matchesPackagedPlatform(asset, runtimeEnv.platform)) {
+    throw new Error(`Packaged asset ${assetId} is not declared for platform ${runtimeEnv.platform}`);
+  }
+
+  return cloneEntry(asset);
 }
 
-function listPackagedAssets() {
-  return DISTRIBUTION_MANIFEST.packagedAssets.map((asset) => ({ ...asset }));
+function listPackagedAssets(runtimeEnv = {}) {
+  return DISTRIBUTION_MANIFEST.packagedAssets
+    .filter((asset) => matchesPackagedPlatform(asset, runtimeEnv.platform))
+    .map((asset) => cloneEntry(asset));
+}
+
+function getInstallerPrerequisites(platform) {
+  const prerequisites = DISTRIBUTION_MANIFEST.installerPrerequisites[platform] || [];
+  return prerequisites.map((entry) => cloneEntry(entry));
+}
+
+function listElectronBuilderExtraResources(platform) {
+  return listPackagedAssets({ platform }).map((asset) => ({
+    from: asset.builder.from,
+    to: asset.builder.to,
+    filter: [...getBuilderFilter(asset.builder, platform)]
+  }));
 }
 
 module.exports = {
   DISTRIBUTION_MANIFEST,
   getBundledBinary,
+  getInstallerPrerequisites,
+  listElectronBuilderExtraResources,
   getPackagedAsset,
   listPackagedAssets
 };

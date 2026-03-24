@@ -3,8 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
+const electronBuilderConfig = require('../electron-builder.config.js');
+const packageJson = require('../package.json');
 const {
   getBundledBinary,
+  getInstallerPrerequisites,
+  listElectronBuilderExtraResources,
   listPackagedAssets
 } = require('../src/main/distribution/distribution-manifest.js');
 const {
@@ -29,12 +33,45 @@ test('distribution manifest centralizes bundled binary naming and packaged asset
     listPackagedAssets().map((asset) => asset.id),
     ['bin', 'models']
   );
+
+  assert.deepEqual(
+    listPackagedAssets({ platform: 'darwin' }).map((asset) => asset.id),
+    ['bin', 'models']
+  );
+  assert.deepEqual(
+    listPackagedAssets({ platform: 'win32' }).map((asset) => asset.id),
+    ['bin']
+  );
 });
 
-test('distribution manifest stays honest about the current packaged win32 quadrant', () => {
+test('distribution manifest keeps unsupported packaged quadrants behind explicit prerequisites', () => {
+  assert.deepEqual(
+    getInstallerPrerequisites('darwin').map(({ id, status }) => ({ id, status })),
+    [{ id: 'bundled-whisper-cli', status: 'ready' }]
+  );
+  assert.deepEqual(
+    getInstallerPrerequisites('win32').map(({ id, status }) => ({ id, status })),
+    [{ id: 'bundled-whisper-cli', status: 'pending' }]
+  );
   assert.throws(
     () => getBundledBinary('whisper-cli', { platform: 'win32', isPackaged: true }),
     /Packaged binary whisper-cli is not declared for platform win32/
+  );
+});
+
+test('electron-builder config sources platform resource slots from the distribution manifest', () => {
+  assert.equal('build' in packageJson, false);
+  assert.equal(
+    packageJson.scripts.build,
+    'electron-builder --config electron-builder.config.js'
+  );
+  assert.deepEqual(
+    electronBuilderConfig.mac.extraResources,
+    listElectronBuilderExtraResources('darwin')
+  );
+  assert.deepEqual(
+    electronBuilderConfig.win.extraResources,
+    listElectronBuilderExtraResources('win32')
   );
 });
 
@@ -72,5 +109,15 @@ test('bundled asset helpers fail explicitly for unsupported packaged win32 binar
       resourcesPath: 'C:\\Program Files\\Kory Whisper\\resources'
     }),
     /Packaged binary whisper-cli is not declared for platform win32/
+  );
+
+  assert.throws(
+    () => resolvePackagedAssetPath('models', {
+      platform: 'win32',
+      isPackaged: true,
+      appPath: 'C:\\Program Files\\Kory Whisper\\resources\\app.asar',
+      resourcesPath: 'C:\\Program Files\\Kory Whisper\\resources'
+    }),
+    /Packaged asset models is not declared for platform win32/
   );
 });

@@ -10,7 +10,7 @@
     "test:coverage": "c8 node --test tests/*.test.js",
     "lint": "node scripts/repo-hardgate.js",
     "verify": "npm run lint && npm test && npm run test:coverage",
-    "build": "electron-builder",
+    "build": "electron-builder --config electron-builder.config.js",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [
@@ -30,52 +30,5 @@
     "node-record-lpcm16": "^1.0.1",
     "opencc-js": "^1.0.5",
     "uiohook-napi": "^1.5.4"
-  },
-  "build": {
-    "appId": "com.kory.whisper",
-    "productName": "Kory Whisper",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "src/**/*",
-      "assets/**/*",
-      "bin/**/*",
-      "node_modules/**/*"
-    ],
-    "asar": false,
-    "extraResources": [
-      {
-        "from": "bin",
-        "to": "bin",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "models",
-        "to": "models",
-        "filter": [
-          "*.bin"
-        ]
-      }
-    ],
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "arm64"
-          ]
-        }
-      ],
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "hardenedRuntime": false,
-      "extendInfo": {
-        "NSMicrophoneUsageDescription": "Kory Whisper 需要使用麦克风进行语音识别"
-      }
-    }
   }
 }

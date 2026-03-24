@@ -36,7 +36,7 @@ function resolvePackagedAssetPath(assetId, runtimeEnv = {}) {
     return null;
   }
 
-  const asset = getPackagedAsset(assetId);
+  const asset = getPackagedAsset(assetId, runtimeEnv);
   return resolveRelativeManifestPath(asset.relativePath, getDistributionRoot(runtimeEnv));
 }
 
