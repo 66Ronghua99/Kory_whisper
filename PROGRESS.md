@@ -2,42 +2,33 @@
 
 ## Active Milestone
 
-M0: Validate the combined audio-cues and shared-model-store branch before deciding how to fold it back into the main product line.
+M1: Freeze the Windows runtime decoupling boundary proof and keep the macOS behavior baseline honest.
 
 ## Done
 
-- Existing repository migrated onto the Harness bootstrap skeleton
-- Root governance docs and repository map established
-- Superpowers templates added under `docs/superpowers/templates/`
-- Bootstrap manifest created at `.harness/bootstrap.toml`
-- Whisper transcription now fails fast on child-process errors instead of returning partial `.txt` output as a successful result; verification captured at `artifacts/whisper-engine-partial-output/verify.txt`
-- Whisper debug captures now stay on by default under `~/.kory-whisper/debug-captures/`, preserving the latest three runs with `audio.wav`, optional `raw.txt`, and `meta.json`; verification captured at `artifacts/whisper-debug-captures/verify.txt`
-- Dictation feedback timing now aligns tray state with recording-start success and clipboard-ready success instead of waiting on cue playback; tray reset timers also clear on newer states
+- Harness bootstrap and repository governance baseline are in place
+- Main-process startup is now routed through `src/main/app/` instead of staying inside `src/main/index.js`
+- Runtime facts, paths, and capability derivation now live in `src/main/runtime/`
+- Platform profiles and adapters are split under `src/main/platform/`
+- Business-service orchestration now lives in `src/main/services/`
+- The repo hardgate now blocks direct `process.platform` branching inside `src/main/services/`
+- The guarded coverage slice now stays on the stable seam subset instead of pretending to cover the whole main process
+- Architecture and testing docs now match the new composition/runtime/profile boundaries and the narrower coverage ratchet
 
 ## In Progress
 
-- Integrated test branch combines platform audio cues with the shared Whisper model store
-- Audio cues now expose configurable defaults and settings controls on top of the integrated branch
-- Manual macOS smoke validation remains the next gate before broader branch integration
-- Lint/test governance baseline now exists with repo-boundary hardgates and guarded-slice coverage ratchet
+- Preparing the first Windows implementation loop behind the frozen runtime/profile seams
 
 ## Pending
 
-- Decide whether to merge this combined branch into the clipboard-output branch or keep it as a separate staging branch
-- Re-freeze the next product scope after this integration test closes
-- Expand automated proof beyond the guarded slice once more main-process modules expose seam-friendly collaborators
+- Implement the first Windows-native behavior loop on top of the new `win32` profile and adapter paths
+- Run macOS smoke on a mac host when one is available
 
 ## Product Snapshot
 
-- Platform focus: macOS desktop voice input via Electron
-- Core path: audio capture -> Whisper transcription -> optional post-process -> simulated text input
-- Integration test focus on this branch:
-  - macOS start/output system cue playback
-  - configurable default sounds (`Tink` + `Glass`) via settings
-  - shared Whisper models under `~/.kory-whisper/models/`
-  - Whisper debug captures under `~/.kory-whisper/debug-captures/` with latest-three retention
-  - no duplicate model download when changing worktrees
-- Governance baseline:
-  - `npm run lint` proves platform-selector and renderer boundary invariants
-  - `npm run test:coverage` enforces guarded-slice coverage for config/model-path/platform modules
-  - evidence captured under `artifacts/lint-test-design/`
+- `src/main/index.js` is now a thin entrypoint
+- `src/main/app/` owns lifecycle/composition sequencing
+- `src/main/runtime/` owns runtime facts, path derivation, and capability facts
+- `src/main/services/` owns dictation workflow orchestration and must stay platform-agnostic
+- `src/main/platform/` owns platform selection, profiles, and OS-specific adapters
+- Guarded coverage remains intentionally narrow and honest

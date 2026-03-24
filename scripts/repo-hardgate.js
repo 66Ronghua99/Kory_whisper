@@ -25,6 +25,13 @@ const RENDERER_FORBIDDEN_PATTERNS = [
     message: 'Renderer code must not shell out to bundled binaries or system sounds directly.'
   }
 ];
+const BUSINESS_SERVICE_FORBIDDEN_PATTERNS = [
+  {
+    id: 'business-service-platform-branch',
+    pattern: /process\.platform/,
+    message: 'Business-service modules must resolve runtime platform facts before branching instead of reading process.platform directly.'
+  }
+];
 
 function toRepoPath(absolutePath) {
   return path.relative(repoRoot, absolutePath).split(path.sep).join('/');
@@ -129,6 +136,18 @@ function analyzeRepository() {
         if (check.pattern.test(content)) {
           violations.push({
             ruleId: 'LTD-003',
+            file: repoPath,
+            detail: `${check.id}: ${check.message}`
+          });
+        }
+      }
+    }
+
+    if (repoPath.startsWith('src/main/services/')) {
+      for (const check of BUSINESS_SERVICE_FORBIDDEN_PATTERNS) {
+        if (check.pattern.test(content)) {
+          violations.push({
+            ruleId: 'LTD-004',
             file: repoPath,
             detail: `${check.id}: ${check.message}`
           });
