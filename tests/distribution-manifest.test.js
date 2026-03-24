@@ -40,7 +40,7 @@ test('distribution manifest centralizes bundled binary naming and packaged asset
   );
   assert.deepEqual(
     listPackagedAssets({ platform: 'win32' }).map((asset) => asset.id),
-    ['bin']
+    ['bin', 'models']
   );
 });
 
@@ -109,6 +109,16 @@ test('bundled asset helpers stay aligned with packaged runtime path resolution',
 });
 
 test('bundled asset helpers fail explicitly for unsupported packaged win32 binaries', () => {
+  assert.equal(
+    resolvePackagedAssetPath('models', {
+      platform: 'win32',
+      isPackaged: true,
+      appPath: 'C:\\Program Files\\Kory Whisper\\resources\\app.asar',
+      resourcesPath: 'C:\\Program Files\\Kory Whisper\\resources'
+    }),
+    'C:\\Program Files\\Kory Whisper\\resources\\models'
+  );
+
   assert.throws(
     () => resolveBundledBinaryPath('whisper-cli', {
       platform: 'win32',
@@ -117,15 +127,5 @@ test('bundled asset helpers fail explicitly for unsupported packaged win32 binar
       resourcesPath: 'C:\\Program Files\\Kory Whisper\\resources'
     }),
     /Packaged binary whisper-cli is not declared for platform win32/
-  );
-
-  assert.throws(
-    () => resolvePackagedAssetPath('models', {
-      platform: 'win32',
-      isPackaged: true,
-      appPath: 'C:\\Program Files\\Kory Whisper\\resources\\app.asar',
-      resourcesPath: 'C:\\Program Files\\Kory Whisper\\resources'
-    }),
-    /Packaged asset models is not declared for platform win32/
   );
 });

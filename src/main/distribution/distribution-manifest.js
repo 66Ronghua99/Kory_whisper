@@ -44,7 +44,7 @@ const DISTRIBUTION_MANIFEST = freezeClone({
     {
       id: 'models',
       relativePath: 'models',
-      packagedPlatforms: ['darwin'],
+      packagedPlatforms: ['darwin', 'win32'],
       builder: {
         from: 'models',
         to: 'models',
