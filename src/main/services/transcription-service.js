@@ -186,8 +186,16 @@ async function prepareTranscriptionService(options = {}) {
   const logger = options.logger || console;
   const WhisperEngine = options.WhisperEngine || require('../whisper-engine');
   const DebugCaptureStore = options.DebugCaptureStore || require('../debug-capture-store');
+  const injectedWhisperEngine = options.whisperEngine || null;
 
   const modelName = getModelFilename(config.whisper?.model);
+  if (injectedWhisperEngine) {
+    return new TranscriptionService({
+      whisperEngine: injectedWhisperEngine,
+      defaultVocabPath: config.vocabulary?.path
+    });
+  }
+
   const modelReady = await ensureModelReady({
     modelName,
     runtimePaths,
@@ -204,7 +212,7 @@ async function prepareTranscriptionService(options = {}) {
     onError: (message, error) => logger.error('[DebugCaptureStore]', message, error)
   });
 
-  const whisperEngine = options.whisperEngine || new WhisperEngine({
+  const whisperEngine = new WhisperEngine({
     modelPath: runtimePaths.getSharedModelPath(modelName),
     vocabPath: config.vocabulary?.path,
     language: config.whisper?.language || 'zh',

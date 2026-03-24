@@ -5,6 +5,10 @@ const { EventEmitter } = require('events');
 const { createCompositionRoot } = require('../src/main/app/composition-root.js');
 const { bootstrapApp } = require('../src/main/app/bootstrap.js');
 const { registerAppLifecycle } = require('../src/main/app/lifecycle.js');
+const {
+  TranscriptionService,
+  prepareTranscriptionService
+} = require('../src/main/services/transcription-service.js');
 
 function createShortcutManagerSpy(events) {
   const shortcutManager = new EventEmitter();
@@ -261,6 +265,246 @@ test('composition root requires injected runtime facts instead of falling back t
     }),
     /runtimeEnv\.platform/
   );
+});
+
+test('prepareTranscriptionService returns null when startup model download is declined', async () => {
+  const modelDownloader = {
+    async checkModel() {
+      return { exists: false, path: '/models/ggml-base.bin' };
+    },
+    getModelInfo() {
+      return { size: '141 MB', desc: 'base model' };
+    },
+    async seedModelFromPath() {
+      return { copied: false, path: '/models/ggml-base.bin', size: 0 };
+    }
+  };
+
+  const service = await prepareTranscriptionService({
+    config: {
+      whisper: { model: 'base', language: 'zh' },
+      vocabulary: { path: '/tmp/vocabulary.json' }
+    },
+    dialog: {
+      async showMessageBox() {
+        return { response: 1 };
+      }
+    },
+    modelDownloader,
+    runtimePaths: {
+      sharedModelsDir: '/models',
+      sharedDebugCapturesDir: '/captures',
+      whisperBinPath: '/bin/whisper-cli',
+      getBundledModelPath(modelName) {
+        return `/bundled/${modelName}`;
+      },
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  assert.equal(service, null);
+});
+
+test('prepareTranscriptionService switches models through downloader-backed readiness checks', async () => {
+  const events = [];
+  const availability = new Map([
+    ['ggml-base.bin', { exists: true, size: 200 * 1024 * 1024 }],
+    ['ggml-small.bin', { exists: false, size: 0 }]
+  ]);
+
+  class FakeWhisperEngine {
+    constructor(options) {
+      this.modelPath = options.modelPath;
+      this.vocabPath = options.vocabPath;
+      this.language = options.language;
+      this.prompt = options.prompt;
+      this.outputScript = options.outputScript;
+      this.enablePunctuation = options.enablePunctuation;
+      events.push(`engine:create:${options.modelPath}`);
+    }
+
+    updateRuntimeOptions(options) {
+      this.modelPath = options.modelPath;
+      this.vocabPath = options.vocabPath;
+      this.language = options.language;
+      this.prompt = options.prompt;
+      this.outputScript = options.outputScript;
+      this.enablePunctuation = options.enablePunctuation;
+      events.push(`engine:update:${options.modelPath}`);
+    }
+  }
+
+  const service = await prepareTranscriptionService({
+    config: {
+      whisper: {
+        model: 'base',
+        language: 'zh',
+        prompt: ''
+      },
+      vocabulary: {
+        path: '/tmp/base-vocabulary.json'
+      }
+    },
+    BrowserWindow: class {
+      constructor() {
+        this.webContents = {
+          send(channel, progress) {
+            events.push(`progress:${channel}:${progress}`);
+          }
+        };
+      }
+
+      loadURL() {
+        events.push('progress-window:load');
+      }
+
+      close() {
+        events.push('progress-window:close');
+      }
+    },
+    DebugCaptureStore: class {
+      constructor(debugPath) {
+        events.push(`captures:${debugPath}`);
+      }
+    },
+    dialog: {
+      async showMessageBox() {
+        events.push('dialog:show');
+        return { response: 0 };
+      },
+      showErrorBox() {
+        events.push('dialog:error');
+      }
+    },
+    modelDownloader: {
+      async checkModel(modelName) {
+        events.push(`check:${modelName}`);
+        return {
+          exists: availability.get(modelName).exists,
+          size: availability.get(modelName).size,
+          path: `/models/${modelName}`
+        };
+      },
+      getModelInfo(modelName) {
+        events.push(`info:${modelName}`);
+        return { size: modelName, desc: 'model' };
+      },
+      async seedModelFromPath(sourcePath, modelName) {
+        events.push(`seed:${modelName}:${sourcePath}`);
+        return { copied: false, size: 0, path: `/models/${modelName}` };
+      },
+      async downloadModel(modelName, onProgress) {
+        events.push(`download:${modelName}`);
+        availability.set(modelName, { exists: true, size: 500 * 1024 * 1024 });
+        onProgress(50);
+      }
+    },
+    runtimePaths: {
+      sharedModelsDir: '/models',
+      sharedDebugCapturesDir: '/captures',
+      whisperBinPath: '/bin/whisper-cli',
+      getBundledModelPath(modelName) {
+        return `/bundled/${modelName}`;
+      },
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    },
+    WhisperEngine: FakeWhisperEngine
+  });
+
+  assert.ok(service instanceof TranscriptionService);
+
+  await service.applyConfig({
+    whisper: {
+      model: 'small',
+      language: 'zh',
+      prompt: 'next'
+    },
+    vocabulary: {
+      path: '/tmp/small-vocabulary.json'
+    }
+  });
+
+  assert.deepEqual(events, [
+    'check:ggml-base.bin',
+    'info:ggml-base.bin',
+    'captures:/captures',
+    'engine:create:/models/ggml-base.bin',
+    'check:ggml-small.bin',
+    'info:ggml-small.bin',
+    'seed:ggml-small.bin:/bundled/ggml-small.bin',
+    'dialog:show',
+    'progress-window:load',
+    'download:ggml-small.bin',
+    'progress:progress:50',
+    'progress-window:close',
+    'engine:update:/models/ggml-small.bin'
+  ]);
+});
+
+test('prepareTranscriptionService lets injected whisper engines own their own model lifecycle', async () => {
+  const events = [];
+  const whisperEngine = {
+    modelPath: '/models/ggml-base.bin',
+    vocabPath: '/tmp/base-vocabulary.json',
+    language: 'zh',
+    prompt: '',
+    outputScript: 'simplified',
+    enablePunctuation: true,
+    updateRuntimeOptions(options) {
+      this.modelPath = options.modelPath;
+      events.push(`engine:update:${options.modelPath}`);
+    }
+  };
+
+  const service = await prepareTranscriptionService({
+    config: {
+      whisper: {
+        model: 'base',
+        language: 'zh'
+      },
+      vocabulary: {
+        path: '/tmp/base-vocabulary.json'
+      }
+    },
+    modelDownloader: {
+      async checkModel() {
+        events.push('downloader:check');
+        throw new Error('downloader should not be used for injected engines');
+      }
+    },
+    runtimePaths: {
+      sharedModelsDir: '/models',
+      sharedDebugCapturesDir: '/captures',
+      whisperBinPath: '/bin/whisper-cli',
+      getBundledModelPath(modelName) {
+        return `/bundled/${modelName}`;
+      },
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    },
+    whisperEngine
+  });
+
+  await service.applyConfig({
+    whisper: {
+      model: 'small',
+      language: 'zh',
+      prompt: 'next'
+    },
+    vocabulary: {
+      path: '/tmp/next-vocabulary.json'
+    }
+  });
+
+  assert.deepEqual(events, [
+    'engine:update:/models/ggml-base.bin'
+  ]);
+  assert.equal(whisperEngine.modelPath, '/models/ggml-base.bin');
 });
 
 test('bootstrap app keeps startup sequencing outside the Electron entrypoint', async () => {
