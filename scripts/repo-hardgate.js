@@ -163,6 +163,31 @@ function tokenizeJavaScript(source) {
   return tokens;
 }
 
+function findMatchingPunctuation(tokens, startIndex, openValue, closeValue) {
+  let depth = 0;
+
+  for (let index = startIndex; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type !== 'punctuation') {
+      continue;
+    }
+
+    if (token.value === openValue) {
+      depth += 1;
+      continue;
+    }
+
+    if (token.value === closeValue) {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
 function hasServicePlatformBranch(content) {
   const tokens = tokenizeJavaScript(content);
 
@@ -182,6 +207,15 @@ function hasServicePlatformBranch(content) {
 
     if (
       current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '?' &&
+      afterNext?.type === 'punctuation' && afterNext.value === '.' &&
+      afterAfterNext?.type === 'identifier' && afterAfterNext.value === 'platform'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
       next?.type === 'punctuation' && next.value === '[' &&
       afterNext?.type === 'string' && afterNext.value === 'platform' &&
       afterAfterNext?.type === 'punctuation' && afterAfterNext.value === ']'
@@ -190,12 +224,30 @@ function hasServicePlatformBranch(content) {
     }
 
     if (
-      current?.type === 'identifier' && current.value === 'const' &&
-      next?.type === 'punctuation' && next.value === '{' &&
-      tokens.slice(index + 2).some((token) => token.type === 'identifier' && token.value === 'platform') &&
-      tokens.slice(index + 2).some((token) => token.type === 'identifier' && token.value === 'process')
+      current?.type === 'identifier' && ['const', 'let', 'var'].includes(current.value) &&
+      next?.type === 'punctuation' && next.value === '{'
     ) {
-      return true;
+      const closingBraceIndex = findMatchingPunctuation(tokens, index + 1, '{', '}');
+      if (closingBraceIndex === -1) {
+        continue;
+      }
+
+      const equalsToken = tokens[closingBraceIndex + 1];
+      const sourceToken = tokens[closingBraceIndex + 2];
+      if (
+        equalsToken?.type !== 'punctuation' ||
+        equalsToken.value !== '=' ||
+        sourceToken?.type !== 'identifier' ||
+        sourceToken.value !== 'process'
+      ) {
+        continue;
+      }
+
+      const destructuringTokens = tokens.slice(index + 2, closingBraceIndex);
+      const hasPlatformBinding = destructuringTokens.some((token) => token.type === 'identifier' && token.value === 'platform');
+      if (hasPlatformBinding) {
+        return true;
+      }
     }
   }
 

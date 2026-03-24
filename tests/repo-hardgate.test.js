@@ -72,6 +72,19 @@ test('repo hardgate rejects destructured service-layer platform aliases', () => 
   );
 });
 
+test('repo hardgate allows destructuring platform from non-process objects', () => {
+  withTempServiceModule(
+    '__temp-platform-non-process-destructured.js',
+    "const { platform } = someOtherObject;\nconst info = process.cwd();\nmodule.exports = { platform, info };\n",
+    () => {
+      const violations = analyzeRepository();
+      const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
+
+      assert.equal(serviceViolation, undefined);
+    }
+  );
+});
+
 test('repo hardgate rejects bracket-based service-layer platform access', () => {
   withTempServiceModule(
     '__temp-platform-bracket.js',
@@ -82,6 +95,21 @@ test('repo hardgate rejects bracket-based service-layer platform access', () => 
 
       assert.ok(serviceViolation, 'expected a bracket-access service-layer platform violation');
       assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-bracket.js');
+      assert.match(serviceViolation.detail, /process\.platform/);
+    }
+  );
+});
+
+test('repo hardgate rejects optional-chaining service-layer platform access', () => {
+  withTempServiceModule(
+    '__temp-platform-optional.js',
+    "const runtimePlatform = process?.platform;\nmodule.exports = runtimePlatform;\n",
+    () => {
+      const violations = analyzeRepository();
+      const serviceViolation = violations.find((violation) => violation.ruleId === 'LTD-004');
+
+      assert.ok(serviceViolation, 'expected an optional-chaining service-layer platform violation');
+      assert.equal(serviceViolation.file, 'src/main/services/__temp-platform-optional.js');
       assert.match(serviceViolation.detail, /process\.platform/);
     }
   );
