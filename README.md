@@ -1,39 +1,38 @@
 # Kory Whisper
 
-[English README](./README.en.md)
+[中文说明](./README.zh-CN.md)
 
-Kory Whisper 是一个面向 macOS 的本地语音输入工具。你按住快捷键说话，应用会录音、用本地 Whisper 模型转写，然后把文字自动输入到当前光标所在的位置。
+Kory Whisper is a local voice-to-text input tool for macOS. Hold a shortcut key to record while pressing, release to transcribe, and let the result be inserted into the active text field automatically.
 
-这份 README 以“用户下载下来就能用”为目标编写，优先说明安装、授权、首次启动和日常使用方法。
+## Current Support
 
-## 当前支持
+- Stable support: macOS
+- Windows: in development
+- Recommended install method: DMG package
+- Notable capabilities:
+  - Local Whisper transcription (no text sent to remote services by default)
+  - Hold-to-talk shortcut workflow
+  - Vocabulary customization
+  - Rule-based ASR post-processing
+  - Optional audio cues
 
-- 当前稳定支持：macOS
-- 当前推荐安装方式：下载 DMG 安装包
-- 当前主要能力：
-  - 本地 Whisper 转写，不上传语音
-  - 长按快捷键开始录音，松开后自动输入
-  - 自定义词表
-  - 规则式 ASR 后处理
-  - 可选提示音
+## Installation
 
-## 下载与安装
+### 1) Install from DMG (recommended for normal users)
 
-### 方式一：下载 DMG 安装包
+1. Download the latest `Kory Whisper` macOS package from the release page.
+2. Double-click the `.dmg` file.
+3. Drag `Kory Whisper.app` into `Applications`.
+4. Start `Kory Whisper` from `Applications`.
 
-1. 下载发布页中的 `Kory Whisper` macOS 安装包
-2. 双击打开 `.dmg`
-3. 将 `Kory Whisper.app` 拖到“应用程序”
-4. 从“应用程序”中启动 `Kory Whisper`
+Notes:
 
-提示：
+- Packaged distribution currently targets Apple Silicon/macOS primarily.
+- If macOS blocks the app from an unknown developer, allow it in `System Settings -> Privacy & Security`.
 
-- 当前打包配置优先面向 Apple Silicon macOS
-- 如果系统提示应用来源未验证，请在“系统设置 -> 隐私与安全性”中允许打开
+### 2) Run from source
 
-### 方式二：从源码运行
-
-适合开发者或需要自己调试的人：
+For developers or advanced users:
 
 ```bash
 git clone <repository-url>
@@ -42,258 +41,213 @@ npm install
 npm start
 ```
 
-## 第一次启动会发生什么
+If you are a normal user, prefer the DMG installer to reduce environment dependencies.
 
-第一次启动时，应用通常会经历下面几个步骤：
+## First Launch Flow
 
-1. 菜单栏出现 Kory Whisper 图标
-2. 应用请求麦克风权限
-3. 你第一次真正开始转写时，如果本机还没有对应 Whisper 模型，应用会提示下载模型
-4. 下载完成后，模型会缓存在 `~/.kory-whisper/models/`
+On first launch, you normally see:
 
-模型缓存说明：
+1. A menu bar icon appears.
+2. The app may request microphone access.
+3. On first real dictation, it may ask to download a Whisper model.
+4. After download, model files are cached in `~/.kory-whisper/models/`.
 
-- Whisper 模型会保存在 `~/.kory-whisper/models/`
-- 同一台机器上的不同源码目录、不同 worktree、以及打包后的 app，会共用这份模型缓存
+## Required Authorizations
 
-## 必须授予的权限
+These three permissions are required for end-to-end input:
 
-要让“说完之后自动输入到当前应用”正常工作，至少要完成下面两类授权。
+- Microphone
+- Accessibility
+- Input Monitoring (for some macOS setups)
 
-### 1. 麦克风权限
+Paths:
 
-- 第一次使用时点击“允许”
-- 如果之前点过拒绝：
-  - 打开“系统设置”
-  - 进入“隐私与安全性 -> 麦克风”
-  - 打开 `Kory Whisper` 的开关
+- `System Settings -> Privacy & Security -> Microphone`
+- `System Settings -> Privacy & Security -> Accessibility`
+- `System Settings -> Privacy & Security -> Input Monitoring`
 
-### 2. 辅助功能权限
+## Usage
 
-这是自动输入文字所必需的权限。
+1. Start `Kory Whisper`.
+2. Confirm the menu bar icon appears.
+3. Put the cursor in an editable text area.
+4. Hold the shortcut for about 500 ms (default).
+5. Speak.
+6. Release the key.
+7. Wait for transcribed text insertion.
 
-操作路径：
+Default shortcut:
 
-1. 打开“系统设置”
-2. 进入“隐私与安全性 -> 辅助功能”
-3. 把 `Kory Whisper` 加进去并启用
+- `RIGHT COMMAND`
 
-如果没有这个权限，应用可能可以录音和转写，但不能把文字输入到当前窗口。
+Alternatives in settings:
 
-### 3. 输入监控
+- `LEFT COMMAND`
+- `RIGHT OPTION`
+- `LEFT OPTION`
+- `RIGHT CONTROL`
+- `LEFT CONTROL`
+- `F13`, `F14`, `F15`
 
-某些 macOS 环境下，快捷键监听还可能依赖“输入监控”授权。
+## Settings
 
-如果你发现：
+- Shortcut and long-press duration
+- Whisper model
+- Language
+- Output script (simplified/traditional)
+- ASR post-processing toggle
+- Vocabulary toggle
+- Punctuation restoration
+- Audio cues
 
-- 菜单栏图标已经出现
-- 但长按快捷键没有任何反应
+This section uses rule-based local ASR post-processing only (no online LLM post-processing).
 
-请检查：
+## Paths
 
-1. “系统设置”
-2. “隐私与安全性 -> 输入监控”
-3. 确认 `Kory Whisper` 已启用
+- Config: `~/.kory-whisper/config.json`
+- Vocabulary: `~/.kory-whisper/vocabulary.json`
+- Models: `~/.kory-whisper/models/`
+- Debug captures: `~/.kory-whisper/debug-captures/`
 
-## 最快上手
+## Model Files and Storage
 
-完成安装和授权后，按下面的方式使用：
+Model download checks are made against size thresholds before use.
 
-1. 启动 `Kory Whisper`
-2. 确认菜单栏出现图标
-3. 把光标放到任意可输入文本的位置
-4. 长按快捷键约 0.5 秒
-5. 开始说话
-6. 松开快捷键
-7. 等待识别结果自动输入
+| Whisper model key | File name       | Disk size (approx.) |
+| --- | --- | --- |
+| base   | `ggml-base.bin`   | 141 MB |
+| small  | `ggml-small.bin`  | 466 MB |
+| medium | `ggml-medium.bin` | 769 MB |
 
-默认快捷键是：
+All models are resolved to:
 
-- 右 Command（`RIGHT COMMAND`）
+- `~/.kory-whisper/models/<filename>`
 
-设置页里也可以改成：
+This folder is shared between source builds, packaged apps, and different worktrees.
 
-- 左 Command
-- 右 Option
-- 左 Option
-- 右 Control
-- 左 Control
-- F13 / F14 / F15
+## Installation and Model Download Troubleshooting (Most common issue)
 
-## 设置页能做什么
+When the model is missing, the app opens a download dialog:
 
-设置页目前主要提供以下选项：
+1. `Download model`
+2. `Quit`
 
-- 快捷键和长按时长
-- Whisper 模型
-- 识别语言
-- 中文输出模式
-- 是否启用 ASR 后处理
-- 是否启用词表
-- 是否启用标点优化
-- 是否启用提示音
+### If model download fails
 
-其中：
+Typical symptoms:
 
-- `ASR 后处理` 是默认主路径的一部分，用来做规则式清洗
-- 它不是旧版本里那种“可选 LLM 联网后处理”
-- 旧的 `whisper.llm` 历史配置会被保留，但当前默认界面不会暴露这组配置
+- Dialog shows an error after trying to download.
+- The model still appears as missing on next launch.
+- Download progress sticks or no progress is shown.
 
-## 配置文件位置
+Common causes and quick checks:
 
-主配置文件：
+- No network / unstable network.
+- Corporate proxy, VPN split tunnel, or firewall blocking `huggingface.co`.
+- Permission denied when writing `~/.kory-whisper/models/`.
+- Partially downloaded model file (too small/invalid size).
+- App started from restricted environment where permission dialogs are not available.
 
-- `~/.kory-whisper/config.json`
+### Step-by-step recovery
 
-词表文件：
+1. Choose a stable network.
+2. Retry once from the app.
+3. If it still fails, remove the broken model file if present and retry:
 
-- `~/.kory-whisper/vocabulary.json`
+```bash
+rm -f ~/.kory-whisper/models/ggml-base.bin
+rm -f ~/.kory-whisper/models/ggml-small.bin
+rm -f ~/.kory-whisper/models/ggml-medium.bin
+```
 
-模型目录：
+4. Keep one model selected in settings and try again.
+5. If download is still blocked in your network, use manual install below.
+
+### Manual model installation (what to place and where)
+
+You can place model files directly under:
 
 - `~/.kory-whisper/models/`
 
-调试转写抓取目录：
+with exact file names expected by the app.
 
-- `~/.kory-whisper/debug-captures/`
+#### Option A: copy from project `models/` folder
 
-## 推荐配置
-
-如果你只是想尽快开始使用，可以先保持默认：
-
-```json
-{
-  "shortcut": {
-    "key": "RIGHT COMMAND",
-    "longPressDuration": 500
-  },
-  "whisper": {
-    "model": "base",
-    "language": "zh",
-    "outputScript": "simplified",
-    "enablePunctuation": true
-  },
-  "postProcessing": {
-    "enabled": true
-  },
-  "vocabulary": {
-    "enabled": true
-  },
-  "audioCues": {
-    "enabled": true
-  }
-}
-```
-
-补充建议：
-
-- 想更快启动和更低占用：用 `base`
-- 想提升准确率：换 `small`
-- 中文用户通常保持 `outputScript = simplified`
-- 如果你常说专业术语，优先维护词表，而不是先改别的设置
-
-## 自定义词表
-
-编辑 `~/.kory-whisper/vocabulary.json`：
-
-```json
-{
-  "words": [
-    "OpenAI",
-    "Anthropic",
-    "TypeScript",
-    "Kubernetes"
-  ],
-  "replacements": {
-    "JMI": "Gemini",
-    "mini max": "MiniMax"
-  }
-}
-```
-
-使用建议：
-
-- `words`：作为识别提示词，适合品牌名、术语名、人名
-- `replacements`：适合修正固定误识别
-
-例如：
-
-- Whisper 经常把 `Gemini` 识别成 `JMI`
-- 就可以在 `replacements` 里写 `"JMI": "Gemini"`
-
-## 常见问题
-
-### 1. 应用启动了，但长按快捷键没有反应
-
-通常检查这几项：
-
-- 是否已授予“辅助功能”
-- 是否已授予“输入监控”
-- 当前快捷键是否和系统快捷键冲突
-
-### 2. 可以录音，但没有自动输入到当前应用
-
-通常是：
-
-- 没有授予“辅助功能”
-- 当前焦点窗口不接受模拟输入
-
-### 3. 第一次转写时提示下载模型
-
-这是正常行为。
-
-- 模型首次下载后会缓存在 `~/.kory-whisper/models/`
-- 以后同机复用，不需要重复下载
-
-### 4. 识别结果术语不准
-
-优先做这两件事：
-
-- 在 `vocabulary.json` 里补 `words`
-- 对固定误识别补 `replacements`
-
-### 5. 下载源码后运行不起来
-
-请确认：
+From source checkout:
 
 ```bash
-npm install
-npm start
+cp <your-repo>/models/ggml-base.bin ~/.kory-whisper/models/
+# or
+cp <your-repo>/models/ggml-small.bin ~/.kory-whisper/models/
 ```
 
-如果你是普通用户，建议优先使用 DMG 安装包，而不是源码运行。
-
-## 隐私说明
-
-- 语音转写主路径使用本地 Whisper
-- 语音文件不会默认上传到远端服务
-- Whisper 模型、配置、词表和调试输出都保存在本机用户目录下
-
-## 开发者说明
-
-常用命令：
+#### Option B: download with command line
 
 ```bash
-# 开发模式
+mkdir -p ~/.kory-whisper/models
+curl -L -o ~/.kory-whisper/models/ggml-base.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+```
+
+Use `ggml-small.bin` or `ggml-medium.bin` if you selected those models in app settings.
+
+After placing the file, restart the app.
+
+To verify size quickly:
+
+```bash
+ls -lh ~/.kory-whisper/models/
+```
+
+Expected thresholds (minimum accepted):
+
+- `ggml-base.bin` > 100 MB
+- `ggml-small.bin` > 300 MB
+- `ggml-medium.bin` > 700 MB
+
+If the file is smaller than this, delete and replace it.
+
+### Where to report/collect logs
+
+When asking for help, include:
+
+- macOS version and chip architecture
+- App channel used (DMG or source)
+- Model key in settings
+- Exact error text shown in the download error box
+- Output of `ls -lh ~/.kory-whisper/models/`
+
+## Workflow Issues (quick triage)
+
+- App opens but shortcut does nothing:
+  - Check Accessibility + Input Monitoring in `System Settings`.
+  - Ensure no global shortcut conflict.
+- You can record but text is not injected:
+  - Accessibility is usually missing.
+  - Current focused app may block synthetic input.
+- Repeated errors while switching models:
+  - Confirm selected model file exists in `~/.kory-whisper/models/`.
+  - Confirm file naming matches selection.
+
+## Development Commands
+
+```bash
 npm run dev
-
-# 测试 + 覆盖率 + 仓库硬门禁
 npm run verify
-
-# 构建
 npm run build
 ```
 
-当前仓库的主流程已经拆分为：
+## Roadmap
 
-- `src/main/app/`
-- `src/main/runtime/`
-- `src/main/services/`
-- `src/main/platform/`
-- `src/main/post-processing/`
+- Windows support: actively in development.
+- Current focus remains on improving macOS stability and installation robustness.
 
-如果你是来改代码的，优先看仓库根目录的 `AGENTS.md`、`PROGRESS.md`、`NEXT_STEP.md`。
+## Privacy
 
-## 许可证
+- Transcription uses local Whisper by default.
+- Audio/transcripts are not uploaded by default.
+- User data and cache are kept in `~/.kory-whisper/`.
+
+## License
 
 MIT
