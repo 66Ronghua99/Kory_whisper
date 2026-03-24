@@ -65,6 +65,14 @@ test('electron-builder config sources platform resource slots from the distribut
     packageJson.scripts.build,
     'electron-builder --config electron-builder.config.js'
   );
+  assert.equal(
+    electronBuilderConfig.mac.entitlements,
+    'build/entitlements.mac.plist'
+  );
+  assert.equal(
+    electronBuilderConfig.mac.entitlementsInherit,
+    'build/entitlements.mac.plist'
+  );
   assert.deepEqual(
     electronBuilderConfig.mac.extraResources,
     listElectronBuilderExtraResources('darwin')

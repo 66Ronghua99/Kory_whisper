@@ -20,6 +20,8 @@ module.exports = {
         arch: ['arm64']
       }
     ],
+    entitlements: 'build/entitlements.mac.plist',
+    entitlementsInherit: 'build/entitlements.mac.plist',
     hardenedRuntime: false,
     extendInfo: {
       NSMicrophoneUsageDescription: 'Kory Whisper 需要使用麦克风进行语音识别'
