@@ -80,6 +80,10 @@ function sanitizeConfigForRenderer(config = {}) {
   return sanitized;
 }
 
+function normalizePermissionContractFromProfile(profile = {}) {
+  return profile && profile.uiContract ? profile.uiContract : {};
+}
+
 class CompositionRoot {
   constructor(options = {}) {
     const electron = getElectronSurface(options);
@@ -194,7 +198,8 @@ class CompositionRoot {
       shortcut: new ShortcutService({ shortcutManager }),
       permission: new PermissionService({
         permissionGateway,
-        dialog: this.dialog
+        dialog: this.dialog,
+        permissionContract: this.getPlatformPermissionContract()
       })
     };
 
@@ -205,6 +210,7 @@ class CompositionRoot {
       injectionService: this.services.injection,
       cueService: this.services.cue,
       trayService: this.services.tray,
+      permissionContract: this.getPlatformPermissionContract(),
       logger: this.logger
     });
   }
@@ -261,10 +267,16 @@ class CompositionRoot {
 
     this.ipcMain.handle('get-config', () => {
       if (typeof this.configManager.sanitizeForRenderer === 'function') {
-        return this.configManager.sanitizeForRenderer(this.configManager.get());
+        return {
+          ...this.configManager.sanitizeForRenderer(this.configManager.get()),
+          platformContract: this.getPlatformPermissionContract()
+        };
       }
 
-      return sanitizeConfigForRenderer(this.configManager.get());
+      return {
+        ...sanitizeConfigForRenderer(this.configManager.get()),
+        platformContract: this.getPlatformPermissionContract()
+      };
     });
     this.ipcMain.handle('save-config', async (event, configPatch) => {
       const nextConfig = typeof this.configManager.mergeRendererPatch === 'function'
@@ -380,8 +392,12 @@ class CompositionRoot {
 
   syncTrayPermissionReadiness(readiness) {
     if (this.services.tray && typeof this.services.tray.setPermissionReadiness === 'function') {
-      this.services.tray.setPermissionReadiness(readiness);
+      this.services.tray.setPermissionReadiness(readiness, this.getPlatformPermissionContract());
     }
+  }
+
+  getPlatformPermissionContract() {
+    return normalizePermissionContractFromProfile(this.platformApi.profile || {});
   }
 
   getRuntimeTrayManager() {

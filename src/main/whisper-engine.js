@@ -9,25 +9,14 @@
 
 const { execFile } = require('child_process');
 const fs = require('fs').promises;
-const path = require('path');
 
 class WhisperEngine {
   constructor(options = {}) {
     this.modelPath = options.modelPath || './models/ggml-base.bin';
     this.language = options.language || 'zh';
     this.prompt = options.prompt || '';
-    this.whisperBin = options.whisperBin || this.getWhisperBinaryPath();
+    this.whisperBin = options.whisperBin || '';
     this.debugCaptureStore = options.debugCaptureStore || null;
-  }
-
-  getWhisperBinaryPath() {
-    const platform = process.platform;
-
-    if (platform === 'win32') {
-      return path.join(__dirname, '../../bin/whisper-cli.exe');
-    }
-
-    return path.join(__dirname, '../../bin/whisper-cli');
   }
 
   async transcribe(audioPath, options = {}) {

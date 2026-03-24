@@ -18,6 +18,7 @@ class TrayManager extends EventEmitter {
     this.onboardingWindow = null;
     this.currentState = 'idle'; // idle, recording, processing, success, error
     this.permissionReadiness = null;
+    this.permissionContract = null;
     this.resetTimer = null;
   }
 
@@ -88,8 +89,11 @@ class TrayManager extends EventEmitter {
     return labels[this.currentState] || '未知';
   }
 
-  setPermissionReadiness(readiness) {
+  setPermissionReadiness(readiness, permissionContract = null) {
     this.permissionReadiness = readiness || null;
+    if (permissionContract && typeof permissionContract === 'object') {
+      this.permissionContract = permissionContract;
+    }
     this.applyStateVisuals();
     this.updateContextMenu();
     this.pushPermissionReadinessToWindows();
@@ -126,7 +130,55 @@ class TrayManager extends EventEmitter {
       inputMonitoring: 'Input Monitoring'
     };
 
+    const permissionSurfaces = this.getPermissionContractSurfaces();
+    if (permissionSurfaces.length > 0) {
+      const matched = permissionSurfaces.find((surface) => surface.key === surfaceName);
+      if (matched && (matched.menuLabel || matched.label)) {
+        return matched.menuLabel || matched.label;
+      }
+    }
+
     return names[surfaceName] || surfaceName;
+  }
+
+  getSurfaceActionLabel(surfaceName) {
+    const surfaces = this.getPermissionContractSurfaces();
+    const matched = surfaces.find((surface) => surface && surface.key === surfaceName);
+    if (matched && matched.actionLabel) {
+      return matched.actionLabel;
+    }
+
+    const label = this.getReadableSurfaceName(surfaceName);
+    return `Open ${label} Settings`;
+  }
+
+  getPermissionContractSurfaces() {
+    const contract = this.permissionContract || {};
+    const menuContract = contract.permission || {};
+    if (Array.isArray(menuContract.surfaces)) {
+      return menuContract.surfaces;
+    }
+
+    return [];
+  }
+
+  getPermissionContractOrder() {
+    const contract = this.permissionContract || {};
+    const menuContract = contract.permission || {};
+    if (Array.isArray(menuContract.surfaceOrder) && menuContract.surfaceOrder.length > 0) {
+      return menuContract.surfaceOrder;
+    }
+
+    if (this.permissionReadiness && Array.isArray(this.permissionReadiness.surfaceOrder) && this.permissionReadiness.surfaceOrder.length > 0) {
+      return this.permissionReadiness.surfaceOrder;
+    }
+
+    return ['microphone', 'accessibility', 'inputMonitoring'];
+  }
+
+  getPermissionMenuContract() {
+    const contract = this.permissionContract || {};
+    return contract.permission || {};
   }
 
   getBlockedSurfaces() {
@@ -134,13 +186,16 @@ class TrayManager extends EventEmitter {
       return [];
     }
 
-    return Object.entries(this.permissionReadiness.surfaces || {})
+    const surfaces = this.permissionReadiness.surfaces || {};
+    return this.getPermissionContractOrder()
+      .map((surfaceName) => [surfaceName, surfaces[surfaceName]])
       .filter(([, surface]) => surface && surface.status !== 'granted' && surface.status !== 'unsupported')
       .map(([surfaceName, surface]) => ({
         surfaceName,
         label: this.getReadableSurfaceName(surfaceName),
         status: surface.status || 'unknown',
-        settingsTarget: surface.settingsTarget || surfaceName
+        settingsTarget: surface.settingsTarget || surfaceName,
+        actionLabel: this.getSurfaceActionLabel(surfaceName)
       }));
   }
 
@@ -188,13 +243,19 @@ class TrayManager extends EventEmitter {
     const blockedSurfaces = this.getBlockedSurfaces();
 
     if (blockedSurfaces.length > 0) {
+      const menuContract = this.getPermissionMenuContract();
+      const blockedHeader = menuContract.menu?.blockedHeader || '语音输入在完成设置前不可用';
+      const blockedHint = menuContract.menu?.blockedHint || '请完成权限设置后再继续';
+      const permissionSetupLabel = menuContract.menu?.openPermissionSetupLabel || 'Open Permission Setup';
+      const recheckLabel = menuContract.menu?.recheckPermissionsLabel || 'Re-check Permissions';
+
       template.push({ type: 'separator' });
       template.push({
-        label: '语音输入在完成设置前不可用',
+        label: blockedHeader,
         enabled: false
       });
       template.push({
-        label: '请完成权限设置后再继续',
+        label: blockedHint,
         enabled: false
       });
       blockedSurfaces.forEach((surface) => {
@@ -205,16 +266,16 @@ class TrayManager extends EventEmitter {
       });
       template.push({ type: 'separator' });
       template.push({
-        label: 'Open Permission Setup',
+        label: permissionSetupLabel,
         click: () => this.openPermissionOnboarding()
       });
       template.push({
-        label: 'Re-check Permissions',
+        label: recheckLabel,
         click: () => this.recheckPermissionReadiness()
       });
       blockedSurfaces.forEach((surface) => {
         template.push({
-          label: `Open ${surface.label} Settings`,
+          label: surface.actionLabel || `Open ${surface.label} Settings`,
           click: () => this.openPermissionSettings(surface.settingsTarget)
         });
       });

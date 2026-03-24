@@ -6,6 +6,42 @@ const SUPPORTED_SOUND_NAMES = Object.freeze([
   'Hero'
 ]);
 
+const PERMISSION_UI_SURFACES = Object.freeze([
+  {
+    key: 'microphone',
+    label: 'Microphone',
+    onboardingLabel: '麦克风',
+    settingsTarget: 'microphone',
+    why: '用于录制你说的话，并把声音送进转写流程。',
+    missingReason: 'required-for-recording',
+    missingCta: 'request-or-open-settings',
+    menuLabel: '麦克风',
+    actionLabel: '打开麦克风设置'
+  },
+  {
+    key: 'accessibility',
+    label: 'Accessibility',
+    onboardingLabel: '辅助功能',
+    settingsTarget: 'accessibility',
+    why: '用于把转写结果输入到当前应用，并维持快捷键控制。',
+    missingReason: 'required-for-text-injection',
+    missingCta: 'open-settings-and-recheck',
+    menuLabel: '辅助功能',
+    actionLabel: '打开辅助功能设置'
+  },
+  {
+    key: 'inputMonitoring',
+    label: 'Input Monitoring',
+    onboardingLabel: '输入监控',
+    settingsTarget: 'input-monitoring',
+    why: '用于监听全局快捷键，让你在任意应用里启动语音输入。',
+    missingReason: 'required-for-global-hotkey',
+    missingCta: 'open-settings-and-recheck',
+    menuLabel: '输入监控',
+    actionLabel: '打开输入监控设置'
+  }
+]);
+
 module.exports = Object.freeze({
   id: 'darwin',
   displayName: 'macOS',
@@ -35,6 +71,28 @@ module.exports = Object.freeze({
     permissions: Object.freeze({
       supported: true,
       surfaces: Object.freeze(['microphone', 'accessibility', 'input-monitoring'])
+    })
+  }),
+  uiContract: Object.freeze({
+    permission: Object.freeze({
+      surfaces: PERMISSION_UI_SURFACES,
+      surfaceOrder: Object.freeze(['microphone', 'accessibility', 'inputMonitoring']),
+      menu: Object.freeze({
+        blockedHeader: '语音输入在完成设置前不可用',
+        blockedHint: '请完成权限设置后再继续',
+        openPermissionSetupLabel: 'Open Permission Setup',
+        recheckPermissionsLabel: 'Re-check Permissions'
+      }),
+      onboarding: Object.freeze({
+        title: 'Kory Whisper 权限引导',
+        lead: '完成麦克风、辅助功能和输入监控后，语音输入才会进入可用状态。',
+        statusLabels: Object.freeze({
+          granted: '已授权',
+          missing: '未授权',
+          unknown: '状态未知',
+          unsupported: '系统不支持'
+        })
+      })
     })
   })
 });

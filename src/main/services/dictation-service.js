@@ -11,6 +11,7 @@ class DictationService {
     this.injectionService = options.injectionService;
     this.cueService = options.cueService;
     this.trayService = options.trayService;
+    this.permissionContract = options.permissionContract || {};
     this.logger = options.logger || console;
     this.isRecording = false;
   }
@@ -102,7 +103,9 @@ class DictationService {
   }
 
   getBlockedSurface(readiness) {
-    const surfaceOrder = ['microphone', 'accessibility', 'inputMonitoring'];
+    const surfaceOrder = Array.isArray(readiness.surfaceOrder) && readiness.surfaceOrder.length > 0
+      ? readiness.surfaceOrder
+      : ['microphone', 'accessibility', 'inputMonitoring'];
 
     for (const surfaceName of surfaceOrder) {
       const surface = readiness && readiness.surfaces && readiness.surfaces[surfaceName];
@@ -121,14 +124,29 @@ class DictationService {
   }
 
   getBlockedMessage(readiness, blockedSurface) {
-    const surfaceLabels = {
+    const surfaceLabel = this.getReadableSurfaceLabel(blockedSurface && blockedSurface.surfaceName);
+
+    const surfaceLabelText = surfaceLabel || (blockedSurface ? blockedSurface.surfaceName : '权限');
+    return `语音输入当前不可用，请先开启${surfaceLabelText}权限`;
+  }
+
+  getReadableSurfaceLabel(surfaceName) {
+    const fallbackLabels = {
       microphone: '麦克风',
       accessibility: '辅助功能',
       inputMonitoring: '输入监控'
     };
 
-    const surfaceLabel = blockedSurface ? surfaceLabels[blockedSurface.surfaceName] || blockedSurface.surfaceName : '权限';
-    return `语音输入当前不可用，请先开启${surfaceLabel}权限`;
+    if (!surfaceName || !this.permissionContract || !this.permissionContract.permission) {
+      return fallbackLabels[surfaceName];
+    }
+
+    const contractSurface = Array.isArray(this.permissionContract.permission.surfaces)
+      ? this.permissionContract.permission.surfaces.find((surface) => surface.key === surfaceName)
+      : null;
+
+    return (contractSurface && (contractSurface.onboardingLabel || contractSurface.label || contractSurface.menuLabel))
+      || fallbackLabels[surfaceName];
   }
 
   async tryValidateInputMonitoring(readiness, blockedSurface) {
