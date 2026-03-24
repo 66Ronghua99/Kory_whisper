@@ -14,6 +14,11 @@ test('settings html replaces the old llm controls with one top-level ASR post-pr
   assert.match(settingsHtml, /id="outputScript"/);
   assert.match(settingsHtml, /id="useVocabulary"/);
   assert.match(settingsHtml, /id="enablePunctuation"/);
+  assert.match(settingsHtml, /id="permissions-section"/);
+  assert.match(settingsHtml, /data-permission-surface="microphone"/);
+  assert.match(settingsHtml, /data-permission-surface="accessibility"/);
+  assert.match(settingsHtml, /data-permission-surface="inputMonitoring"/);
+  assert.match(settingsHtml, /id="permissions-refresh"/);
 
   assert.doesNotMatch(settingsHtml, /id="enableLlmPostprocess"/);
   assert.doesNotMatch(settingsHtml, /id="llmModel"/);
@@ -32,6 +37,10 @@ test('embedded settings script reads and writes postProcessing enabled without u
     settingsHtml,
     /postProcessing:\s*\{\s*\.\.\.currentConfig\.postProcessing,\s*enabled: document\.getElementById\('enablePostProcessing'\)\.checked/s
   );
+  assert.match(
+    settingsHtml,
+    /whisper:\s*\{\s*\.\.\.\(currentConfig\.whisper \|\| \{\}\),/s
+  );
 
   assert.match(
     settingsHtml,
@@ -49,4 +58,11 @@ test('embedded settings script reads and writes postProcessing enabled without u
   assert.doesNotMatch(settingsHtml, /config\.whisper\?\.llm/);
   assert.doesNotMatch(settingsHtml, /currentConfig\.whisper\?\.llm/);
   assert.doesNotMatch(settingsHtml, /document\.getElementById\('llm/);
+});
+
+test('embedded settings script consumes the shared permission readiness endpoints for refresh and repair actions', () => {
+  assert.match(settingsHtml, /ipcRenderer\.invoke\('get-permission-readiness'\)/);
+  assert.match(settingsHtml, /ipcRenderer\.invoke\('recheck-permission-readiness'\)/);
+  assert.match(settingsHtml, /ipcRenderer\.invoke\('open-permission-settings'/);
+  assert.doesNotMatch(settingsHtml, /permissionStatus/);
 });

@@ -127,7 +127,17 @@ class CompositionRoot {
     this.registerAppEvents();
 
     this.services.tray.init();
-    const permissionState = await this.services.permission.ensureStartupPermissions();
+    const permissionState = await this.loadStartupReadiness();
+    this.syncTrayPermissionReadiness(permissionState);
+    if (!permissionState.isReady) {
+      if (this.services.tray && typeof this.services.tray.showPermissionBlocked === 'function') {
+        this.services.tray.showPermissionBlocked(permissionState);
+      }
+
+      if (permissionState.firstRunNeedsOnboarding) {
+        this.openPermissionOnboarding();
+      }
+    }
 
     if (this.shortcutStartDelayMs > 0) {
       await this.wait(this.shortcutStartDelayMs);
@@ -136,7 +146,9 @@ class CompositionRoot {
     try {
       await this.services.shortcut.start();
     } catch (error) {
-      await this.services.permission.showShortcutInitializationFailure(error, permissionState);
+      if (permissionState.isReady) {
+        await this.services.permission.showShortcutInitializationFailure(error, permissionState);
+      }
       this.logger.error('[Main] Failed to initialize shortcut manager:', error);
     }
 
@@ -151,7 +163,8 @@ class CompositionRoot {
       channels: 1
     });
     const permissionGateway = this.collaborators.permissionGateway || this.platformApi.getPermissionGateway({
-      systemPreferences: this.systemPreferences
+      systemPreferences: this.systemPreferences,
+      shell: this.shell
     });
     const audioCuePlayer = this.collaborators.audioCuePlayer || this.platformApi.getAudioCuePlayer(config.audioCues || {});
     const inputSimulator = this.collaborators.inputSimulator || this.platformApi.getInputSimulator({
@@ -227,6 +240,13 @@ class CompositionRoot {
     this.services.tray
       .on('show-settings', () => this.services.tray.openSettings())
       .on('open-vocab', () => this.openVocabEditor())
+      .on('open-permission-onboarding', () => this.openPermissionOnboarding())
+      .on('recheck-permission-readiness', async () => {
+        const readiness = await this.safePermissionReadiness('recheck');
+        this.syncTrayPermissionReadiness(readiness);
+        return readiness;
+      })
+      .on('open-permission-settings', (surface) => this.services.permission.openSettings(surface))
       .on('quit', () => {
         if (this.app && typeof this.app.quit === 'function') {
           this.app.quit();
@@ -255,6 +275,14 @@ class CompositionRoot {
       await this.configManager.save(nextConfig);
     });
     this.ipcMain.handle('open-vocab-editor', () => this.openVocabEditor());
+    this.ipcMain.handle('get-permission-readiness', async () => this.safePermissionReadiness('check'));
+    this.ipcMain.handle('recheck-permission-readiness', async () => {
+      const readiness = await this.safePermissionReadiness('recheck');
+      this.syncTrayPermissionReadiness(readiness);
+      return readiness;
+    });
+    this.ipcMain.handle('open-permission-settings', (event, surface) => this.services.permission.openSettings(surface));
+    this.ipcMain.handle('open-permission-onboarding', () => this.openPermissionOnboarding());
     this.ipcMain.handle('get-logs', async () => {
       if (typeof this.loggerModule.getRecentLogs === 'function') {
         return this.loggerModule.getRecentLogs(200);
@@ -300,6 +328,68 @@ class CompositionRoot {
     }
 
     this.shell.openPath(this.configManager.getVocabPath());
+  }
+
+  async loadStartupReadiness() {
+    return this.safePermissionReadiness('check');
+  }
+
+  async safePermissionReadiness(mode = 'check') {
+    try {
+      if (mode === 'recheck' && this.services.permission && typeof this.services.permission.recheckReadiness === 'function') {
+        return await this.services.permission.recheckReadiness();
+      }
+
+      return await this.services.permission.getReadiness();
+    } catch (error) {
+      this.logger.error('[Main] Failed to load permission readiness:', error);
+      return {
+        isReady: false,
+        firstRunNeedsOnboarding: false,
+        refreshedAt: new Date().toISOString(),
+        surfaces: {
+          microphone: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'microphone'
+          },
+          accessibility: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'accessibility'
+          },
+          inputMonitoring: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'input-monitoring'
+          }
+        }
+      };
+    }
+  }
+
+  openPermissionOnboarding() {
+    const trayManager = this.getRuntimeTrayManager();
+    if (trayManager && typeof trayManager.showPermissionOnboarding === 'function') {
+      trayManager.showPermissionOnboarding();
+    }
+  }
+
+  syncTrayPermissionReadiness(readiness) {
+    if (this.services.tray && typeof this.services.tray.setPermissionReadiness === 'function') {
+      this.services.tray.setPermissionReadiness(readiness);
+    }
+  }
+
+  getRuntimeTrayManager() {
+    if (this.services.tray && this.services.tray.trayManager) {
+      return this.services.tray.trayManager;
+    }
+
+    return this.collaborators.trayManager || null;
   }
 
   async dispose() {

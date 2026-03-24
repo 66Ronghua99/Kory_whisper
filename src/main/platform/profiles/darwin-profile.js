@@ -34,7 +34,7 @@ module.exports = Object.freeze({
     }),
     permissions: Object.freeze({
       supported: true,
-      surfaces: Object.freeze(['microphone', 'accessibility'])
+      surfaces: Object.freeze(['microphone', 'accessibility', 'input-monitoring'])
     })
   })
 });

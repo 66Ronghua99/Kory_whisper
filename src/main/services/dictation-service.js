@@ -18,10 +18,26 @@ class DictationService {
   async handleShortcutStart() {
     this.logger.info('[Main] Long press started - recording...');
 
-    const permissionState = await this.permissionService.ensureMicrophoneAccess();
-    if (permissionState.microphoneGranted === false) {
-      this.trayService.showError('麦克风权限被拒绝，请在系统设置中允许');
-      this.permissionService.openSettings('microphone');
+    const readiness = await this.loadReadiness();
+    if (!readiness.isReady) {
+      const blockedSurface = this.getBlockedSurface(readiness);
+      if (await this.tryValidateInputMonitoring(readiness, blockedSurface)) {
+        return;
+      }
+
+      this.isRecording = false;
+
+      if (this.trayService && typeof this.trayService.showPermissionBlocked === 'function') {
+        this.trayService.showPermissionBlocked(readiness);
+      }
+
+      if (this.trayService && typeof this.trayService.setRecording === 'function') {
+        this.trayService.setRecording(false);
+      }
+
+      const blockedMessage = this.getBlockedMessage(readiness, blockedSurface);
+      this.trayService.showError(blockedMessage);
+      this.openBlockedRepairSurface(readiness, blockedSurface);
       return;
     }
 
@@ -49,6 +65,114 @@ class DictationService {
       }
 
       this.trayService.showError(`录音启动失败: ${error.message}`);
+    }
+  }
+
+  async loadReadiness() {
+    try {
+      return await this.permissionService.getReadiness();
+    } catch (error) {
+      this.logger.error('[Main] Failed to read permission readiness:', error);
+      return {
+        isReady: false,
+        firstRunNeedsOnboarding: false,
+        refreshedAt: new Date().toISOString(),
+        surfaces: {
+          microphone: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'microphone'
+          },
+          accessibility: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'accessibility'
+          },
+          inputMonitoring: {
+            status: 'unknown',
+            reason: 'readiness-check-failed',
+            cta: 'open-settings-and-recheck',
+            settingsTarget: 'input-monitoring'
+          }
+        }
+      };
+    }
+  }
+
+  getBlockedSurface(readiness) {
+    const surfaceOrder = ['microphone', 'accessibility', 'inputMonitoring'];
+
+    for (const surfaceName of surfaceOrder) {
+      const surface = readiness && readiness.surfaces && readiness.surfaces[surfaceName];
+      if (!surface || surface.status === 'granted' || surface.status === 'unsupported') {
+        continue;
+      }
+
+      return {
+        surfaceName,
+        ...surface,
+        settingsTarget: surface.settingsTarget || surfaceName
+      };
+    }
+
+    return null;
+  }
+
+  getBlockedMessage(readiness, blockedSurface) {
+    const surfaceLabels = {
+      microphone: '麦克风',
+      accessibility: '辅助功能',
+      inputMonitoring: '输入监控'
+    };
+
+    const surfaceLabel = blockedSurface ? surfaceLabels[blockedSurface.surfaceName] || blockedSurface.surfaceName : '权限';
+    return `语音输入当前不可用，请先开启${surfaceLabel}权限`;
+  }
+
+  async tryValidateInputMonitoring(readiness, blockedSurface) {
+    if (!this.shouldUseShortcutForInputMonitoringValidation(readiness, blockedSurface)) {
+      return false;
+    }
+
+    if (!this.permissionService || typeof this.permissionService.setRuntimeSurfaceStatus !== 'function') {
+      return false;
+    }
+
+    this.permissionService.setRuntimeSurfaceStatus('inputMonitoring', 'granted');
+    const validatedReadiness = await this.loadReadiness();
+
+    if (this.trayService && typeof this.trayService.setPermissionReadiness === 'function') {
+      this.trayService.setPermissionReadiness(validatedReadiness);
+    }
+
+    return true;
+  }
+
+  shouldUseShortcutForInputMonitoringValidation(readiness, blockedSurface) {
+    if (!blockedSurface || blockedSurface.surfaceName !== 'inputMonitoring' || blockedSurface.status !== 'unknown') {
+      return false;
+    }
+
+    return readiness
+      && readiness.surfaces
+      && readiness.surfaces.microphone
+      && readiness.surfaces.microphone.status === 'granted'
+      && readiness.surfaces.accessibility
+      && readiness.surfaces.accessibility.status === 'granted';
+  }
+
+  openBlockedRepairSurface(readiness, blockedSurface) {
+    if (blockedSurface && this.permissionService && typeof this.permissionService.openSettings === 'function') {
+      this.permissionService.openSettings(blockedSurface.settingsTarget);
+      return;
+    }
+
+    if (readiness && readiness.firstRunNeedsOnboarding) {
+      if (this.trayService && typeof this.trayService.openPermissionOnboarding === 'function') {
+        this.trayService.openPermissionOnboarding();
+      }
     }
   }
 

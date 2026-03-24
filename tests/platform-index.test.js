@@ -50,7 +50,7 @@ test('platform entrypoint resolves the darwin profile, adapter family, and capab
   assert.equal(darwinPlatform.profile, darwinProfile);
   assert.equal(darwinPlatform.capabilities, darwinProfile.capabilities);
   assert.equal(darwinPlatform.capabilities.audioCues.supported, true);
-  assert.deepEqual(darwinPlatform.capabilities.permissions.surfaces, ['microphone', 'accessibility']);
+  assert.deepEqual(darwinPlatform.capabilities.permissions.surfaces, ['microphone', 'accessibility', 'input-monitoring']);
   assert.deepEqual(darwinPlatform.adapterFamily, {
     platform: 'darwin',
     audioRecorder: DarwinAudioRecorder,

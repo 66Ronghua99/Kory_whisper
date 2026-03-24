@@ -15,7 +15,9 @@ class TrayManager extends EventEmitter {
     super();
     this.tray = null;
     this.settingsWindow = null;
+    this.onboardingWindow = null;
     this.currentState = 'idle'; // idle, recording, processing, success, error
+    this.permissionReadiness = null;
     this.resetTimer = null;
   }
 
@@ -65,31 +67,11 @@ class TrayManager extends EventEmitter {
   }
 
   updateContextMenu() {
-    const template = [
-      {
-        label: 'Kory Whisper',
-        enabled: false
-      },
-      { type: 'separator' },
-      {
-        label: '设置',
-        click: () => this.openSettings()
-      },
-      {
-        label: '编辑词表',
-        click: () => this.emit('open-vocab')
-      },
-      { type: 'separator' },
-      {
-        label: '状态: ' + this.getStateLabel(),
-        enabled: false
-      },
-      { type: 'separator' },
-      {
-        label: '退出',
-        click: () => this.emit('quit')
-      }
-    ];
+    if (!this.tray) {
+      return;
+    }
+
+    const template = this.buildMenuTemplate();
 
     const contextMenu = Menu.buildFromTemplate(template);
     this.tray.setContextMenu(contextMenu);
@@ -104,6 +86,162 @@ class TrayManager extends EventEmitter {
       error: '错误'
     };
     return labels[this.currentState] || '未知';
+  }
+
+  setPermissionReadiness(readiness) {
+    this.permissionReadiness = readiness || null;
+    this.applyStateVisuals();
+    this.updateContextMenu();
+  }
+
+  showPermissionBlocked(readiness) {
+    this.setPermissionReadiness(readiness);
+  }
+
+  openPermissionOnboarding() {
+    this.emit('open-permission-onboarding');
+  }
+
+  recheckPermissionReadiness() {
+    this.emit('recheck-permission-readiness');
+  }
+
+  openPermissionSettings(surface) {
+    this.emit('open-permission-settings', surface);
+  }
+
+  getReadinessLabel() {
+    if (!this.permissionReadiness) {
+      return null;
+    }
+
+    return this.permissionReadiness.isReady ? 'Ready' : 'Not Ready';
+  }
+
+  getReadableSurfaceName(surfaceName) {
+    const names = {
+      microphone: 'Microphone',
+      accessibility: 'Accessibility',
+      inputMonitoring: 'Input Monitoring'
+    };
+
+    return names[surfaceName] || surfaceName;
+  }
+
+  getBlockedSurfaces() {
+    if (!this.permissionReadiness || this.permissionReadiness.isReady) {
+      return [];
+    }
+
+    return Object.entries(this.permissionReadiness.surfaces || {})
+      .filter(([, surface]) => surface && surface.status !== 'granted' && surface.status !== 'unsupported')
+      .map(([surfaceName, surface]) => ({
+        surfaceName,
+        label: this.getReadableSurfaceName(surfaceName),
+        status: surface.status || 'unknown',
+        settingsTarget: surface.settingsTarget || surfaceName
+      }));
+  }
+
+  getBlockedSurfaceStatusLabel(status) {
+    const labels = {
+      missing: 'Missing',
+      unknown: 'Unknown'
+    };
+
+    return labels[status] || status;
+  }
+
+  buildMenuTemplate() {
+    const template = [];
+    const readinessLabel = this.getReadinessLabel();
+
+    if (readinessLabel) {
+      template.push({
+        label: readinessLabel,
+        enabled: false
+      });
+
+      template.push({
+        label: 'Kory Whisper',
+        enabled: false
+      });
+    } else {
+      template.push({
+        label: 'Kory Whisper',
+        enabled: false
+      });
+    }
+
+    const currentStateLabel = this.getStateLabel();
+    const transientVisible = this.currentState !== 'idle';
+
+    if (transientVisible) {
+      template.push({ type: 'separator' });
+      template.push({
+        label: '状态: ' + currentStateLabel,
+        enabled: false
+      });
+    }
+
+    const blockedSurfaces = this.getBlockedSurfaces();
+
+    if (blockedSurfaces.length > 0) {
+      template.push({ type: 'separator' });
+      template.push({
+        label: '语音输入在完成设置前不可用',
+        enabled: false
+      });
+      template.push({
+        label: '请完成权限设置后再继续',
+        enabled: false
+      });
+      blockedSurfaces.forEach((surface) => {
+        template.push({
+          label: `${surface.label}: ${this.getBlockedSurfaceStatusLabel(surface.status)}`,
+          enabled: false
+        });
+      });
+      template.push({ type: 'separator' });
+      template.push({
+        label: 'Open Permission Setup',
+        click: () => this.openPermissionOnboarding()
+      });
+      template.push({
+        label: 'Re-check Permissions',
+        click: () => this.recheckPermissionReadiness()
+      });
+      blockedSurfaces.forEach((surface) => {
+        template.push({
+          label: `Open ${surface.label} Settings`,
+          click: () => this.openPermissionSettings(surface.settingsTarget)
+        });
+      });
+      template.push({ type: 'separator' });
+    } else if (!transientVisible && !readinessLabel) {
+      template.push({ type: 'separator' });
+      template.push({
+        label: '状态: ' + currentStateLabel,
+        enabled: false
+      });
+      template.push({ type: 'separator' });
+    }
+
+    template.push({
+      label: '设置',
+      click: () => this.openSettings()
+    });
+    template.push({
+      label: '编辑词表',
+      click: () => this.emit('open-vocab')
+    });
+    template.push({ type: 'separator' });
+    template.push({
+      label: '退出',
+      click: () => this.emit('quit')
+    });
+
+    return template;
   }
 
   clearResetTimer() {
@@ -160,8 +298,14 @@ class TrayManager extends EventEmitter {
   applyStateVisuals() {
     if (!this.tray) return;
 
+    const readinessLabel = this.getReadinessLabel();
     const visuals = {
-      idle: { title: '', tooltip: 'Kory Whisper - 长按右 ⌘ 语音输入' },
+      idle: readinessLabel === 'Not Ready'
+        ? {
+            title: '!',
+            tooltip: 'Kory Whisper - Not Ready'
+          }
+        : { title: '', tooltip: 'Kory Whisper - 长按右 ⌘ 语音输入' },
       recording: { title: '●', tooltip: 'Kory Whisper - 录音中...' },
       processing: { title: '…', tooltip: 'Kory Whisper - 识别中...' },
       success: { title: '✓', tooltip: 'Kory Whisper - 已复制到剪贴板，请手动粘贴' },
@@ -174,15 +318,39 @@ class TrayManager extends EventEmitter {
   }
 
   openSettings() {
-    if (this.settingsWindow) {
-      this.settingsWindow.focus();
-      return;
+    this.openManagedWindow('settingsWindow', {
+      width: 560,
+      height: 760,
+      title: 'Kory Whisper 设置',
+      fileName: 'settings.html'
+    });
+  }
+
+  showPermissionOnboarding() {
+    this.openManagedWindow('onboardingWindow', {
+      width: 760,
+      height: 860,
+      title: 'Kory Whisper 权限引导',
+      fileName: 'permission-onboarding.html'
+    });
+  }
+
+  openManagedWindow(windowKey, options) {
+    const existingWindow = this[windowKey];
+    if (existingWindow && !existingWindow.isDestroyed()) {
+      if (typeof existingWindow.show === 'function') {
+        existingWindow.show();
+      }
+      if (typeof existingWindow.focus === 'function') {
+        existingWindow.focus();
+      }
+      return existingWindow;
     }
 
-    this.settingsWindow = new BrowserWindow({
-      width: 500,
-      height: 400,
-      title: 'Kory Whisper 设置',
+    const managedWindow = new BrowserWindow({
+      width: options.width,
+      height: options.height,
+      title: options.title,
       resizable: false,
       minimizable: false,
       webPreferences: {
@@ -191,11 +359,14 @@ class TrayManager extends EventEmitter {
       }
     });
 
-    this.settingsWindow.loadFile(path.join(__dirname, '../renderer/settings.html'));
+    this[windowKey] = managedWindow;
+    managedWindow.loadFile(path.join(__dirname, '../renderer', options.fileName));
 
-    this.settingsWindow.on('closed', () => {
-      this.settingsWindow = null;
+    managedWindow.on('closed', () => {
+      this[windowKey] = null;
     });
+
+    return managedWindow;
   }
 
   destroy() {
@@ -205,11 +376,16 @@ class TrayManager extends EventEmitter {
       this.settingsWindow.close();
     }
 
+    if (this.onboardingWindow && !this.onboardingWindow.isDestroyed()) {
+      this.onboardingWindow.close();
+    }
+
     if (this.tray && typeof this.tray.destroy === 'function') {
       this.tray.destroy();
     }
 
     this.settingsWindow = null;
+    this.onboardingWindow = null;
     this.tray = null;
   }
 }

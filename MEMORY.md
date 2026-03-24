@@ -7,6 +7,7 @@
 - Runtime facts belong in `src/main/runtime/`, business orchestration in `src/main/services/`, and OS-specific selection/IO in `src/main/platform/`.
 - Fresh verification evidence for the decoupling loop should live in tracked markdown files under `artifacts/windows-runtime-decoupling/`.
 - Manual macOS smoke evidence must say `blocked/needs-mac-host` when the current machine cannot execute the interactive checks.
+- The macOS permission onboarding evidence placeholder now lives at `artifacts/macos-permission-onboarding/README.md`; it should stay honest about which manual macOS cases are still pending.
 - Post-processing cleanup now belongs in `src/main/post-processing/`; `src/main/whisper-engine.js` should stay limited to whisper-cli invocation and debug-capture ownership.
 - Renderer-facing config reads must sanitize legacy `whisper.llm`, and save paths must preserve hidden legacy config instead of dropping it on partial patches.
 - The shared Whisper model store is already canonical on `master`; future worktree reconciliation should compare against `src/main/shared/model-paths.js` before trying to re-merge old model-cache branches.
@@ -24,3 +25,5 @@
 - `postProcessing.enabled` is the renderer-visible kill switch; stage-specific preferences can stay persisted even when the top-level switch is off.
 - The current permission UX target is: app may launch, but dictation stays `not ready` until Microphone, Accessibility, and Input Monitoring are all resolved; first run should auto-open dedicated onboarding, and the menu bar/settings surfaces must keep recovery visible afterward.
 - The approved implementation route for permission UX is: normalize permission facts into one shared readiness snapshot first, then drive tray/menu state, onboarding UI, settings visibility, and dictation guards from that single snapshot.
+- Guarded coverage for the permission onboarding loop now includes the canonical shared readiness seam listed in `.c8rc.json`.
+- Input Monitoring must stay unresolved at startup when the platform check is only `unknown`; the first real shortcut event should validate it instead of immediately reopening System Settings.

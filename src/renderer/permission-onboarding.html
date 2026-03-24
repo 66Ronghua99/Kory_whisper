@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Kory Whisper 权限引导</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(180deg, #f2f6ff 0%, #f6f7fb 100%);
+      color: #233043;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 28px 20px 36px;
+    }
+
+    .hero {
+      margin-bottom: 20px;
+      padding: 20px 22px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 12px 35px rgba(20, 39, 78, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.72);
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      color: #14213d;
+    }
+
+    .lead {
+      font-size: 14px;
+      color: #526176;
+    }
+
+    .section {
+      background: white;
+      border-radius: 16px;
+      padding: 18px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 22px rgba(20, 39, 78, 0.08);
+      border: 1px solid #ebeff7;
+    }
+
+    .section h2 {
+      font-size: 14px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #607086;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+    }
+
+    .summary {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #f7f9fd;
+    }
+
+    #permission-summary {
+      font-size: 13px;
+      color: #334155;
+    }
+
+    .muted {
+      font-size: 12px;
+      color: #708094;
+    }
+
+    .permission-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .permission-card {
+      padding: 16px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+      border: 1px solid #e7ecf5;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .permission-card h3 {
+      font-size: 16px;
+      color: #162238;
+    }
+
+    .permission-status {
+      display: inline-flex;
+      align-self: flex-start;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #e9eefb;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .permission-status.is-granted {
+      background: #ddf7e7;
+      color: #12623f;
+    }
+
+    .permission-status.is-missing,
+    .permission-status.is-unknown {
+      background: #fff0db;
+      color: #9a5818;
+    }
+
+    .permission-status.is-unsupported {
+      background: #edf0f3;
+      color: #677389;
+    }
+
+    .permission-why {
+      font-size: 13px;
+      color: #44546b;
+    }
+
+    .permission-reason {
+      font-size: 12px;
+      color: #7a8699;
+      min-height: 2.4em;
+    }
+
+    .permission-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: auto;
+    }
+
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.2s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: #1d4ed8;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #e5e9f2;
+      color: #243244;
+    }
+
+    .btn-secondary:hover {
+      background: #d8dfec;
+    }
+
+    .footer-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    @media (max-width: 760px) {
+      .permission-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary,
+      .footer-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="hero">
+      <h1>Kory Whisper 权限引导</h1>
+      <p class="lead">完成麦克风、辅助功能和输入监控后，语音输入才会进入可用状态。</p>
+    </div>
+
+    <div class="section">
+      <h2>权限状态</h2>
+      <div class="summary">
+        <div>
+          <div id="permission-summary">正在读取权限状态…</div>
+          <div class="muted" id="permission-updated-at"></div>
+        </div>
+        <button class="btn-secondary" id="refresh-permissions" type="button">重新检查权限</button>
+      </div>
+      <div class="permission-grid">
+        <article class="permission-card" data-permission-surface="microphone">
+          <h3>麦克风</h3>
+          <span class="permission-status" id="microphone-status">未检查</span>
+          <p class="permission-why">用于录制你说的话，并把声音送进转写流程。</p>
+          <p class="permission-reason" id="microphone-reason"></p>
+          <div class="permission-actions">
+            <button class="btn-primary" id="microphone-action" type="button">打开麦克风设置</button>
+          </div>
+        </article>
+        <article class="permission-card" data-permission-surface="accessibility">
+          <h3>辅助功能</h3>
+          <span class="permission-status" id="accessibility-status">未检查</span>
+          <p class="permission-why">用于把转写结果输入到当前应用，并维持快捷键控制。</p>
+          <p class="permission-reason" id="accessibility-reason"></p>
+          <div class="permission-actions">
+            <button class="btn-primary" id="accessibility-action" type="button">打开辅助功能设置</button>
+          </div>
+        </article>
+        <article class="permission-card" data-permission-surface="inputMonitoring">
+          <h3>输入监控</h3>
+          <span class="permission-status" id="inputMonitoring-status">未检查</span>
+          <p class="permission-why">用于监听全局快捷键，让你在任意应用里启动语音输入。</p>
+          <p class="permission-reason" id="inputMonitoring-reason"></p>
+          <div class="permission-actions">
+            <button class="btn-primary" id="inputMonitoring-action" type="button">打开输入监控设置</button>
+          </div>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { ipcRenderer } = require('electron');
+
+    const SURFACES = [
+      {
+        key: 'microphone',
+        label: '麦克风',
+        reasonId: 'microphone-reason',
+        statusId: 'microphone-status',
+        actionId: 'microphone-action',
+        why: '用于录制你说的话，并把声音送进转写流程。'
+      },
+      {
+        key: 'accessibility',
+        label: '辅助功能',
+        reasonId: 'accessibility-reason',
+        statusId: 'accessibility-status',
+        actionId: 'accessibility-action',
+        why: '用于把转写结果输入到当前应用，并维持快捷键控制。'
+      },
+      {
+        key: 'inputMonitoring',
+        label: '输入监控',
+        reasonId: 'inputMonitoring-reason',
+        statusId: 'inputMonitoring-status',
+        actionId: 'inputMonitoring-action',
+        why: '用于监听全局快捷键，让你在任意应用里启动语音输入。'
+      }
+    ];
+
+    function formatStatusText(surface) {
+      switch (surface.status) {
+        case 'granted':
+          return '已授权';
+        case 'missing':
+          return '未授权';
+        case 'unsupported':
+          return '系统不支持';
+        case 'unknown':
+        default:
+          return '状态未知';
+      }
+    }
+
+    function applyStatusClass(element, surface) {
+      element.className = `permission-status is-${surface.status || 'unknown'}`;
+    }
+
+    function renderPermissionSummary(readiness) {
+      const summary = document.getElementById('permission-summary');
+      const updatedAt = document.getElementById('permission-updated-at');
+
+      summary.textContent = readiness.isReady
+        ? '三个权限都已就绪，可以继续使用语音输入。'
+        : '还有权限需要处理，完成后点击重新检查。';
+      updatedAt.textContent = `最后刷新: ${new Date(readiness.refreshedAt).toLocaleString()}`;
+    }
+
+    function renderSurface(surfaceConfig, readiness) {
+      const surface = readiness.surfaces[surfaceConfig.key] || {};
+      const statusElement = document.getElementById(surfaceConfig.statusId);
+      const reasonElement = document.getElementById(surfaceConfig.reasonId);
+      const actionElement = document.getElementById(surfaceConfig.actionId);
+
+      statusElement.textContent = formatStatusText(surface);
+      applyStatusClass(statusElement, surface);
+      reasonElement.textContent = surface.reason
+        ? `${surfaceConfig.why} 当前状态: ${surface.reason}.`
+        : surfaceConfig.why;
+      actionElement.disabled = surface.status === 'unsupported';
+      actionElement.textContent = surface.status === 'unsupported'
+        ? '系统不支持'
+        : `打开${surfaceConfig.label}设置`;
+      actionElement.onclick = () => {
+        ipcRenderer.invoke('open-permission-settings', surface.settingsTarget);
+      };
+    }
+
+    async function refreshPermissions() {
+      const readiness = await ipcRenderer.invoke('get-permission-readiness');
+      renderPermissionSummary(readiness);
+      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+    }
+
+    async function recheckPermissions() {
+      const readiness = await ipcRenderer.invoke('recheck-permission-readiness');
+      renderPermissionSummary(readiness);
+      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+    }
+
+    document.getElementById('refresh-permissions').addEventListener('click', recheckPermissions);
+
+    refreshPermissions().catch((error) => {
+      document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;
+    });
+  </script>
+</body>
+</html>

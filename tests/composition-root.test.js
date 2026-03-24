@@ -21,6 +21,568 @@ function createShortcutManagerSpy(events) {
   return shortcutManager;
 }
 
+test('initialize opens permission onboarding on startup when readiness is blocked', async () => {
+  const events = [];
+  const shortcutManager = createShortcutManagerSpy(events);
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = (readiness) => {
+    events.push(`tray:set-readiness:${readiness.isReady}`);
+  };
+  trayManager.showPermissionBlocked = (readiness) => {
+    events.push(`tray:blocked:${readiness.isReady}`);
+  };
+  trayManager.showPermissionOnboarding = () => {
+    events.push('tray:show-onboarding');
+  };
+
+  const blockedFacts = {
+    microphoneGranted: false,
+    accessibilityEnabled: false,
+    inputMonitoringStatus: 'missing',
+    refreshedAt: '2026-03-24T00:00:00.000Z',
+    surfaces: {
+      microphone: {
+        granted: false
+      },
+      accessibility: {
+        granted: false
+      },
+      inputMonitoring: {
+        status: 'missing'
+      }
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle() {}
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: {
+            key: 'RIGHT COMMAND',
+            longPressDuration: 500
+          },
+          input: {
+            appendSpace: true
+          },
+          audioCues: {
+            enabled: true
+          },
+          whisper: {
+            model: 'base',
+            language: 'zh',
+            prompt: ''
+          },
+          vocabulary: {
+            path: '/tmp/vocabulary.json'
+          }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager,
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          events.push('permissions:check');
+          return blockedFacts;
+        },
+        async ensure() {
+          throw new Error('startup should read shared readiness directly');
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'permissions:check',
+    'tray:set-readiness:false',
+    'tray:blocked:false',
+    'tray:show-onboarding',
+    'shortcut:start'
+  ]);
+});
+
+test('initialize keeps blocked tray state without auto-opening onboarding when first-run flag is false', async () => {
+  const events = [];
+  const shortcutManager = createShortcutManagerSpy(events);
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = (readiness) => {
+    events.push(`tray:set-readiness:${readiness.isReady}`);
+  };
+  trayManager.showPermissionBlocked = (readiness) => {
+    events.push(`tray:blocked:${readiness.isReady}`);
+  };
+  trayManager.showPermissionOnboarding = () => {
+    events.push('tray:show-onboarding');
+  };
+
+  const blockedFacts = {
+    isReady: false,
+    firstRunNeedsOnboarding: false,
+    refreshedAt: '2026-03-24T00:00:00.000Z',
+    surfaces: {
+      microphone: { status: 'granted', settingsTarget: 'microphone' },
+      accessibility: { status: 'missing', settingsTarget: 'accessibility' },
+      inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: { handle() {} },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT COMMAND', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: true },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager,
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          events.push('permissions:check');
+          return blockedFacts;
+        },
+        async ensure() {
+          throw new Error('startup should read shared readiness directly');
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: { modelPath: '/models/ggml-base.bin' },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: { platform: 'darwin' },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'permissions:check',
+    'tray:set-readiness:false',
+    'tray:blocked:false',
+    'shortcut:start'
+  ]);
+});
+
+test('initialize keeps unknown input monitoring unresolved until a real shortcut validation happens', async () => {
+  const events = [];
+  const shortcutManager = createShortcutManagerSpy(events);
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = (readiness) => {
+    events.push(`tray:set-readiness:${readiness.isReady}:${readiness.surfaces.inputMonitoring.status}`);
+  };
+  trayManager.showPermissionBlocked = (readiness) => {
+    events.push(`tray:blocked:${readiness.surfaces.inputMonitoring.status}`);
+  };
+  trayManager.showPermissionOnboarding = () => {
+    events.push('tray:show-onboarding');
+  };
+
+  const blockedFacts = {
+    microphoneGranted: true,
+    accessibilityEnabled: true,
+    inputMonitoringStatus: 'unknown',
+    firstRunNeedsOnboarding: true,
+    refreshedAt: '2026-03-24T00:00:00.000Z',
+    surfaces: {
+      microphone: { granted: true },
+      accessibility: { granted: true },
+      inputMonitoring: { status: 'unknown', settingsTarget: 'input-monitoring' }
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: { handle() {} },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT COMMAND', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: true },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager,
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          events.push('permissions:check');
+          return blockedFacts;
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: { modelPath: '/models/ggml-base.bin' },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: { platform: 'darwin' },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'permissions:check',
+    'tray:set-readiness:false:unknown',
+    'tray:blocked:unknown',
+    'tray:show-onboarding',
+    'shortcut:start'
+  ]);
+});
+
+test('initialize fails closed into blocked tray state when readiness lookup throws', async () => {
+  const events = [];
+  const shortcutManager = createShortcutManagerSpy(events);
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = (readiness) => {
+    events.push(`tray:set-readiness:${readiness.isReady}:${readiness.surfaces.microphone.status}`);
+  };
+  trayManager.showPermissionBlocked = (readiness) => {
+    events.push(`tray:blocked:${readiness.surfaces.accessibility.status}`);
+  };
+  trayManager.showPermissionOnboarding = () => {
+    events.push('tray:show-onboarding');
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: { handle() {} },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT COMMAND', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: true },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager,
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          throw new Error('readiness-check-failed');
+        },
+        async ensure() {
+          throw new Error('startup should read shared readiness directly');
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: { modelPath: '/models/ggml-base.bin' },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: { platform: 'darwin' },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'tray:set-readiness:false:unknown',
+    'tray:blocked:unknown',
+    'shortcut:start'
+  ]);
+});
+
+test('initialize pushes permission readiness into tray state before shortcut startup', async () => {
+  const events = [];
+  const shortcutManager = createShortcutManagerSpy(events);
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = (readiness) => {
+    events.push(`tray:set-readiness:${readiness.isReady}`);
+  };
+  trayManager.showPermissionBlocked = () => {
+    events.push('tray:blocked');
+  };
+  const readyFacts = {
+    microphoneGranted: true,
+    accessibilityEnabled: true,
+    inputMonitoringStatus: 'granted',
+    refreshedAt: '2026-03-24T00:00:00.000Z',
+    surfaces: {
+      microphone: {
+        granted: true
+      },
+      accessibility: {
+        granted: true
+      },
+      inputMonitoring: {
+        status: 'granted'
+      }
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle() {}
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: {
+            key: 'RIGHT COMMAND',
+            longPressDuration: 500
+          },
+          input: {
+            appendSpace: true
+          },
+          audioCues: {
+            enabled: true
+          },
+          whisper: {
+            model: 'base',
+            language: 'zh',
+            prompt: ''
+          },
+          vocabulary: {
+            path: '/tmp/vocabulary.json'
+          }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager,
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          events.push('permissions:check');
+          return readyFacts;
+        },
+        async ensure() {
+          throw new Error('startup should read shared readiness directly');
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.ok(events.indexOf('tray:set-readiness:true') !== -1);
+  assert.ok(events.indexOf('tray:set-readiness:true') < events.indexOf('shortcut:start'));
+  assert.equal(events.includes('tray:blocked'), false);
+});
+
 test('composition root wires injected services and drives dictation through shortcut events', async () => {
   const events = [];
   const handlers = {};
@@ -32,6 +594,7 @@ test('composition root wires injected services and drives dictation through shor
   trayManager.init = () => {
     events.push('tray:init');
   };
+  trayManager.setPermissionReadiness = () => {};
   trayManager.setRecordingState = (isRecording) => {
     events.push(`tray:recording:${isRecording}`);
   };
@@ -46,6 +609,10 @@ test('composition root wires injected services and drives dictation through shor
   };
   trayManager.openSettings = () => {
     events.push('tray:open-settings');
+  };
+  trayManager.showPermissionBlocked = () => {};
+  trayManager.openPermissionOnboarding = () => {
+    events.push('tray:open-onboarding');
   };
 
   const audioRecorder = {
@@ -63,15 +630,17 @@ test('composition root wires injected services and drives dictation through shor
       events.push('permissions:check');
       return {
         microphoneGranted: true,
-        accessibilityEnabled: true
+        accessibilityEnabled: true,
+        inputMonitoringStatus: 'granted',
+        surfaces: {
+          microphone: { granted: true },
+          accessibility: { granted: true },
+          inputMonitoring: { status: 'granted' }
+        }
       };
     },
     async ensure() {
-      events.push('permissions:ensure');
-      return {
-        microphoneGranted: true,
-        accessibilityEnabled: true
-      };
+      throw new Error('startup should read shared readiness directly');
     },
     openSettings(surface) {
       events.push(`permissions:open:${surface}`);
@@ -207,7 +776,7 @@ test('composition root wires injected services and drives dictation through shor
   assert.deepEqual(events, [
     'transcribe:prepare:base:darwin:function',
     'tray:init',
-    'permissions:ensure',
+    'permissions:check',
     'shortcut:start',
     'permissions:check',
     'recording:start',
@@ -330,6 +899,8 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
       },
       trayManager: Object.assign(new EventEmitter(), {
         init() {},
+        setPermissionReadiness() {},
+        showPermissionBlocked() {},
         dispose() {}
       }),
       audioRecorder: {
@@ -340,10 +911,28 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
       },
       permissionGateway: {
         async check() {
-          return { microphoneGranted: true, accessibilityEnabled: true };
+          return {
+            microphoneGranted: true,
+            accessibilityEnabled: true,
+            inputMonitoringStatus: 'granted',
+            surfaces: {
+              microphone: { granted: true },
+              accessibility: { granted: true },
+              inputMonitoring: { status: 'granted' }
+            }
+          };
         },
         async ensure() {
-          return { microphoneGranted: true, accessibilityEnabled: true };
+          return {
+            microphoneGranted: true,
+            accessibilityEnabled: true,
+            inputMonitoringStatus: 'granted',
+            surfaces: {
+              microphone: { granted: true },
+              accessibility: { granted: true },
+              inputMonitoring: { status: 'granted' }
+            }
+          };
         },
         openSettings() {}
       },
@@ -405,6 +994,620 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
   assert.equal(savedConfig.whisper.outputScript, 'original');
   assert.equal(savedConfig.postProcessing.enabled, true);
   assert.deepEqual(savedConfig.whisper.llm, currentConfig.whisper.llm);
+});
+
+test('composition root routes shared permission readiness through tray events and ipc handlers', async () => {
+  const events = [];
+  const handlers = {};
+
+  const trayManager = Object.assign(new EventEmitter(), {
+    init() {
+      events.push('tray:init');
+    },
+    setPermissionReadiness(readiness) {
+      events.push(`tray:set-readiness:${readiness.isReady}`);
+    },
+    showPermissionBlocked() {},
+    openSettings() {
+      events.push('tray:open-settings');
+    },
+    openPermissionOnboarding() {
+      events.push('tray:open-onboarding');
+    },
+    showPermissionOnboarding() {
+      events.push('tray:open-onboarding');
+    }
+  });
+
+  const permissionReadiness = {
+    isReady: false,
+    firstRunNeedsOnboarding: true,
+    refreshedAt: '2026-03-24T00:00:00.000Z',
+    surfaces: {
+      microphone: {
+        status: 'missing',
+        reason: 'required-for-recording',
+        cta: 'request-or-open-settings',
+        settingsTarget: 'microphone'
+      },
+      accessibility: {
+        status: 'granted',
+        reason: null,
+        cta: null,
+        settingsTarget: 'accessibility'
+      },
+      inputMonitoring: {
+        status: 'missing',
+        reason: 'required-for-global-hotkey',
+        cta: 'open-settings-and-recheck',
+        settingsTarget: 'input-monitoring'
+      }
+    }
+  };
+
+  const permissionGateway = {
+    async check() {
+      events.push('permissions:check');
+      return permissionReadiness;
+    },
+    async ensure() {
+      throw new Error('startup should read shared readiness directly');
+    },
+    async recheckReadiness() {
+      events.push('permissions:recheck');
+      return permissionReadiness;
+    },
+    openSettings(surface) {
+      events.push(`permissions:open:${surface}`);
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: {
+            key: 'RIGHT COMMAND',
+            longPressDuration: 500
+          },
+          input: {
+            appendSpace: true
+          },
+          audioCues: {
+            enabled: true
+          },
+          whisper: {
+            model: 'base',
+            language: 'zh',
+            prompt: ''
+          },
+          vocabulary: {
+            path: '/tmp/vocabulary.json'
+          }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: {
+        on() {},
+        async start() {},
+        stop() {}
+      },
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway,
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  assert.equal(typeof handlers['get-permission-readiness'], 'function');
+  assert.equal(typeof handlers['recheck-permission-readiness'], 'function');
+  assert.equal(typeof handlers['open-permission-settings'], 'function');
+  assert.equal(typeof handlers['open-permission-onboarding'], 'function');
+
+  const readiness = await handlers['get-permission-readiness']();
+  assert.equal(readiness.isReady, false);
+  assert.equal(readiness.surfaces.microphone.status, 'missing');
+
+  const rechecked = await handlers['recheck-permission-readiness']();
+  assert.equal(rechecked.isReady, false);
+
+  await handlers['open-permission-settings'](null, 'input-monitoring');
+  await handlers['open-permission-onboarding']();
+
+  trayManager.emit('recheck-permission-readiness');
+  trayManager.emit('open-permission-settings', 'microphone');
+  trayManager.emit('open-permission-onboarding');
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'permissions:check',
+    'tray:set-readiness:false',
+    'tray:open-onboarding',
+    'permissions:check',
+    'permissions:recheck',
+    'tray:set-readiness:false',
+    'permissions:open:input-monitoring',
+    'tray:open-onboarding',
+    'permissions:recheck',
+    'permissions:open:microphone',
+    'tray:open-onboarding',
+    'tray:set-readiness:false'
+  ]);
+});
+
+test('composition root tray and ipc readiness paths fail closed when recheck throws', async () => {
+  const events = [];
+  const handlers = {};
+
+  const trayManager = Object.assign(new EventEmitter(), {
+    init() {
+      events.push('tray:init');
+    },
+    setPermissionReadiness(readiness) {
+      events.push(`tray:set-readiness:${readiness.isReady}:${readiness.surfaces.microphone.status}`);
+    },
+    showPermissionBlocked() {},
+    openSettings() {},
+    showPermissionOnboarding() {}
+  });
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT COMMAND', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: true },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: {
+        on() {},
+        async start() {},
+        stop() {}
+      },
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          return {
+            microphoneGranted: true,
+            accessibilityEnabled: true,
+            inputMonitoringStatus: 'granted',
+            surfaces: {
+              microphone: { granted: true },
+              accessibility: { granted: true },
+              inputMonitoring: { status: 'granted' }
+            }
+          };
+        },
+        async ensure() {
+          throw new Error('startup should read shared readiness directly');
+        },
+        async recheckReadiness() {
+          throw new Error('boom');
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: { modelPath: '/models/ggml-base.bin' },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error(message) {
+        events.push(`log:error:${message}`);
+      }
+    },
+    runtimeEnv: { platform: 'darwin' },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  const checked = await handlers['get-permission-readiness']();
+  assert.equal(checked.isReady, true);
+
+  const rechecked = await handlers['recheck-permission-readiness']();
+  assert.equal(rechecked.isReady, false);
+  assert.equal(rechecked.surfaces.microphone.status, 'unknown');
+
+  trayManager.emit('recheck-permission-readiness');
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'tray:set-readiness:true:granted',
+    'log:error:[Main] Failed to load permission readiness:',
+    'tray:set-readiness:false:unknown',
+    'log:error:[Main] Failed to load permission readiness:',
+    'tray:set-readiness:false:unknown'
+  ]);
+});
+
+test('composition root uses the runtime tray manager directly for permission sync and onboarding', async () => {
+  const events = [];
+  const runtimeTrayManager = {
+    init() {},
+    on() {},
+    openSettings() {},
+    dispose() {}
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    configManager: {
+      get() {
+        return {
+          shortcut: {
+            key: 'RIGHT COMMAND',
+            longPressDuration: 500
+          },
+          input: {
+            appendSpace: true
+          },
+          audioCues: {
+            enabled: true
+          },
+          whisper: {
+            model: 'base',
+            language: 'zh',
+            prompt: ''
+          },
+          vocabulary: {
+            path: '/tmp/vocabulary.json'
+          }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: {
+        on() {},
+        async start() {},
+        stop() {}
+      },
+      trayManager: runtimeTrayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        async ensure() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        async recheckReadiness() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        openSettings(surface) {
+          events.push(`permissions:open:${surface}`);
+        }
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.buildServices(root.configManager.get());
+  root.services.tray = {
+    trayManager: {
+      showPermissionOnboarding() {
+        events.push('tray-manager:open-onboarding');
+      }
+    },
+    setPermissionReadiness(readiness) {
+      events.push(`tray-service:set:${readiness.isReady}`);
+    },
+    openPermissionOnboarding() {
+      throw new Error('composition root routed onboarding through the tray service wrapper');
+    }
+  };
+
+  root.syncTrayPermissionReadiness({ isReady: false });
+  root.openPermissionOnboarding();
+
+  assert.deepEqual(events, [
+    'tray-service:set:false',
+    'tray-manager:open-onboarding'
+  ]);
+});
+
+test('composition root opens onboarding directly from the runtime tray manager for ipc and tray events', async () => {
+  const events = [];
+  const handlers = {};
+
+  const trayManager = new EventEmitter();
+  trayManager.init = () => {
+    events.push('tray:init');
+  };
+  trayManager.setPermissionReadiness = () => {};
+  trayManager.showPermissionBlocked = () => {};
+  trayManager.openSettings = () => {};
+  trayManager.showPermissionOnboarding = () => {
+    events.push('tray-manager:show-onboarding');
+  };
+  trayManager.openPermissionOnboarding = () => {
+    events.push('tray-manager:emit-onboarding');
+    trayManager.emit('open-permission-onboarding');
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: {
+            key: 'RIGHT COMMAND',
+            longPressDuration: 500
+          },
+          input: {
+            appendSpace: true
+          },
+          audioCues: {
+            enabled: true
+          },
+          whisper: {
+            model: 'base',
+            language: 'zh',
+            prompt: ''
+          },
+          vocabulary: {
+            path: '/tmp/vocabulary.json'
+          }
+        };
+      },
+      async save() {},
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: {
+        on() {},
+        async start() {},
+        stop() {}
+      },
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        async ensure() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        async recheckReadiness() {
+          return {
+            isReady: false,
+            surfaces: {
+              microphone: { status: 'missing', settingsTarget: 'microphone' },
+              accessibility: { status: 'granted', settingsTarget: 'accessibility' },
+              inputMonitoring: { status: 'missing', settingsTarget: 'input-monitoring' }
+            }
+          };
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+  root.services.tray.openPermissionOnboarding = () => {
+    throw new Error('composition root routed onboarding through the tray service wrapper');
+  };
+
+  await handlers['open-permission-onboarding']();
+  trayManager.openPermissionOnboarding();
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(events, [
+    'tray:init',
+    'tray-manager:show-onboarding',
+    'tray-manager:show-onboarding',
+    'tray-manager:emit-onboarding',
+    'tray-manager:show-onboarding'
+  ]);
 });
 
 test('prepareTranscriptionService returns null when startup model download is declined', async () => {

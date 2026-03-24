@@ -1,43 +1,123 @@
+const buildPermissionReadiness = require('./permission-readiness.js');
+
 class PermissionService {
   constructor(options = {}) {
     this.permissionGateway = options.permissionGateway;
     this.dialog = options.dialog || null;
+    this.runtimeSurfaceStatuses = {};
   }
 
   async check() {
-    return this.permissionGateway.check();
+    return this.getReadiness();
   }
 
   async ensure() {
-    return this.permissionGateway.ensure();
+    return this.recheckReadiness();
+  }
+
+  async getReadiness() {
+    const rawFacts = await this.permissionGateway.check();
+    return this.applyRuntimeOverrides(buildPermissionReadiness(rawFacts));
+  }
+
+  async recheckReadiness() {
+    if (typeof this.permissionGateway.recheckReadiness === 'function') {
+      return this.applyRuntimeOverrides(buildPermissionReadiness(await this.permissionGateway.recheckReadiness()));
+    }
+
+    return this.getReadiness();
+  }
+
+  setRuntimeSurfaceStatus(surfaceName, status) {
+    if (!surfaceName) {
+      return;
+    }
+
+    this.runtimeSurfaceStatuses[surfaceName] = status;
+  }
+
+  applyRuntimeOverrides(readiness) {
+    if (!readiness || !readiness.surfaces) {
+      return readiness;
+    }
+
+    const nextSurfaces = { ...readiness.surfaces };
+    let changed = false;
+
+    for (const [surfaceName, status] of Object.entries(this.runtimeSurfaceStatuses)) {
+      if (!nextSurfaces[surfaceName] || !status) {
+        continue;
+      }
+
+      if (nextSurfaces[surfaceName].status === status) {
+        continue;
+      }
+
+      nextSurfaces[surfaceName] = {
+        ...nextSurfaces[surfaceName],
+        status
+      };
+      changed = true;
+    }
+
+    if (!changed) {
+      return readiness;
+    }
+
+    const isReady = Object.values(nextSurfaces).every((surface) => surface.status === 'granted' || surface.status === 'unsupported');
+
+    return {
+      ...readiness,
+      isReady,
+      surfaces: nextSurfaces
+    };
   }
 
   async ensureStartupPermissions() {
-    const state = await this.ensure();
+    const rawFacts = typeof this.permissionGateway.ensure === 'function'
+      ? await this.permissionGateway.ensure()
+      : await this.permissionGateway.check();
+    const readiness = buildPermissionReadiness(rawFacts);
 
-    if (!state.microphoneGranted) {
+    if (readiness.isReady) {
+      return readiness;
+    }
+
+    if (readiness.surfaces.microphone.status !== 'granted') {
       await this.showMicrophoneWarning();
     }
 
-    if (!state.accessibilityEnabled) {
+    if (readiness.surfaces.accessibility.status !== 'granted' || readiness.surfaces.inputMonitoring.status !== 'granted') {
       await this.showAccessibilityWarning();
     }
 
-    return state;
+    return readiness;
   }
 
   async ensureMicrophoneAccess() {
-    const state = await this.check();
-    if (state.microphoneGranted) {
-      return state;
+    const readiness = await this.getReadiness();
+    if (readiness.isReady) {
+      return this.decorateLegacyReadiness(readiness);
     }
 
-    const ensuredState = await this.ensure();
-    if (!ensuredState.microphoneGranted) {
+    const rawFacts = typeof this.permissionGateway.ensure === 'function'
+      ? await this.permissionGateway.ensure()
+      : await this.permissionGateway.check();
+    const ensuredReadiness = buildPermissionReadiness(rawFacts);
+
+    if (ensuredReadiness.surfaces.microphone.status !== 'granted') {
       await this.showMicrophoneWarning();
     }
 
-    return ensuredState;
+    return this.decorateLegacyReadiness(ensuredReadiness);
+  }
+
+  decorateLegacyReadiness(readiness) {
+    return {
+      ...readiness,
+      microphoneGranted: readiness.surfaces.microphone.status === 'granted',
+      accessibilityEnabled: readiness.surfaces.accessibility.status === 'granted'
+    };
   }
 
   openSettings(surface) {
@@ -51,15 +131,32 @@ class PermissionService {
       return;
     }
 
-    const missingAccessibility = permissionState.accessibilityEnabled === false;
+    const accessibilityMissing = this.getSurfaceStatus(permissionState, 'accessibility') !== 'granted';
+    const inputMonitoringMissing = this.getSurfaceStatus(permissionState, 'inputMonitoring') !== 'granted';
     await this.dialog.showMessageBox({
       type: 'warning',
       title: '快捷键初始化失败',
       message: '无法初始化全局快捷键。',
-      detail: missingAccessibility
-        ? `当前未检测到辅助功能权限。请同时确认“辅助功能”和“输入监控”已授权，并重启应用。\n${error.message}`
-        : `请检查系统设置中的“辅助功能 / 输入监控”权限，并重启应用。\n${error.message}`
+      detail: accessibilityMissing || inputMonitoringMissing
+        ? `当前未检测到辅助功能或输入监控权限。请同时确认“辅助功能”和“输入监控”已授权，然后返回应用重新检查。\n${error.message}`
+        : `请检查系统设置中的“辅助功能 / 输入监控”权限，然后返回应用重新检查。\n${error.message}`
     });
+  }
+
+  getSurfaceStatus(permissionState, surfaceName) {
+    if (permissionState && permissionState.surfaces && permissionState.surfaces[surfaceName]) {
+      return permissionState.surfaces[surfaceName].status;
+    }
+
+    if (surfaceName === 'accessibility' && permissionState.accessibilityEnabled === false) {
+      return 'missing';
+    }
+
+    if (surfaceName === 'microphone' && permissionState.microphoneGranted === false) {
+      return 'missing';
+    }
+
+    return 'missing';
   }
 
   async showMicrophoneWarning() {
@@ -93,7 +190,7 @@ class PermissionService {
       cancelId: 2,
       title: '需要辅助功能权限',
       message: 'Kory Whisper 需要权限来监听按键并输入文本。',
-      detail: '请在系统设置中确认“辅助功能”和“输入监控”已授权，修改后请重启应用。'
+      detail: '请在系统设置中确认“辅助功能”和“输入监控”已授权，然后返回应用重新检查。'
     });
 
     if (result.response === 0) {

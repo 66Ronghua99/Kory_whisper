@@ -1,11 +1,17 @@
 class PermissionGatewayDarwin {
   constructor(options = {}) {
     this.systemPreferences = options.systemPreferences || this.getElectronSystemPreferences();
+    this.shell = options.shell || this.getElectronShell();
   }
 
   getElectronSystemPreferences() {
     const electron = require('electron');
     return electron.systemPreferences || null;
+  }
+
+  getElectronShell() {
+    const electron = require('electron');
+    return electron.shell || null;
   }
 
   requireSystemPreferences() {
@@ -19,44 +25,67 @@ class PermissionGatewayDarwin {
   async check() {
     const systemPreferences = this.requireSystemPreferences();
     return {
-      microphoneGranted: systemPreferences.getMediaAccessStatus('microphone') === 'granted',
-      accessibilityEnabled: systemPreferences.isTrustedAccessibilityClient(false)
+      surfaces: {
+        microphone: {
+          granted: systemPreferences.getMediaAccessStatus('microphone') === 'granted',
+          canRequest: typeof systemPreferences.askForMediaAccess === 'function'
+        },
+        accessibility: {
+          granted: systemPreferences.isTrustedAccessibilityClient(false)
+        },
+        inputMonitoring: {
+          status: 'unknown'
+        }
+      }
     };
   }
 
   async ensure() {
     const systemPreferences = this.requireSystemPreferences();
-    let microphoneGranted = systemPreferences.getMediaAccessStatus('microphone') === 'granted';
-    if (!microphoneGranted && typeof systemPreferences.askForMediaAccess === 'function') {
-      microphoneGranted = await systemPreferences.askForMediaAccess('microphone');
+    const snapshot = await this.check();
+
+    if (!snapshot.surfaces.microphone.granted && typeof systemPreferences.askForMediaAccess === 'function') {
+      snapshot.surfaces.microphone.granted = await systemPreferences.askForMediaAccess('microphone');
     }
 
-    let accessibilityEnabled = systemPreferences.isTrustedAccessibilityClient(false);
-    if (!accessibilityEnabled) {
-      systemPreferences.isTrustedAccessibilityClient(true);
-      accessibilityEnabled = systemPreferences.isTrustedAccessibilityClient(false);
-    }
-
-    return {
-      microphoneGranted,
-      accessibilityEnabled
-    };
+    return snapshot;
   }
 
-  openSettings(surface) {
-    const systemPreferences = this.requireSystemPreferences();
-
+  getSettingsRoute(surface) {
     if (surface === 'microphone') {
-      systemPreferences.openSystemPreferences('security', 'Privacy_Microphone');
-      return;
+      return {
+        deepLink: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
+        pane: ['security', 'Privacy_Microphone']
+      };
     }
 
     if (surface === 'input-monitoring') {
-      systemPreferences.openSystemPreferences('security', 'Privacy_ListenEvent');
-      return;
+      return {
+        deepLink: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent',
+        pane: ['security', 'Privacy_ListenEvent']
+      };
     }
 
-    systemPreferences.openSystemPreferences('security', 'Privacy_Accessibility');
+    return {
+      deepLink: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility',
+      pane: ['security', 'Privacy_Accessibility']
+    };
+  }
+
+  async openSettings(surface) {
+    const systemPreferences = this.requireSystemPreferences();
+    const route = this.getSettingsRoute(surface);
+
+    if (this.shell && typeof this.shell.openExternal === 'function') {
+      try {
+        await this.shell.openExternal(route.deepLink);
+        return;
+      } catch {}
+    }
+
+    if (typeof systemPreferences.openSystemPreferences === 'function') {
+      systemPreferences.openSystemPreferences(...route.pane);
+    }
   }
 }
 
