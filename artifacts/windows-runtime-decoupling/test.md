@@ -1,0 +1,167 @@
+
+> kory-whisper@0.1.0 test
+> node --test tests/*.test.js
+
+✔ darwin audio cue player uses Tink and Glass as the default system sounds (3.1486ms)
+✔ darwin audio cue player uses configured sound names when provided (0.4915ms)
+✔ darwin audio cue player falls back to defaults for unsupported sound names (0.492ms)
+✔ darwin audio cue player does not invoke afplay when disabled (0.2702ms)
+✔ darwin audio cue player swallows playback failures after logging (0.9126ms)
+✔ win32 audio cue player exposes the same cue methods as no-op calls (0.5219ms)
+✔ config manager defaults audio cues to enabled with Tink and Glass (1.1197ms)
+✔ composition root wires injected services and drives dictation through shortcut events (25.3306ms)
+✔ composition root requires injected runtime facts instead of falling back to process.platform (1.3472ms)
+✔ prepareTranscriptionService returns null when startup model download is declined (28.643ms)
+✔ prepareTranscriptionService switches models through downloader-backed readiness checks (1.5925ms)
+✔ prepareTranscriptionService lets injected whisper engines own their own model lifecycle (0.3992ms)
+✔ bootstrap app keeps startup sequencing outside the Electron entrypoint (0.6044ms)
+✔ lifecycle module owns Electron event registration and shutdown cleanup (0.3964ms)
+✔ top-level config manager stays as a compatibility shim for the canonical config home (2.3185ms)
+✔ base config defaults stay platform-neutral until profile defaults are applied (0.8008ms)
+✔ canonical config manager merges platform profile defaults without changing the persisted config shape (1.8912ms)
+✔ profile defaults can come from explicit profile input instead of hard-coded platform branches (0.2244ms)
+✔ unsupported platforms fall back to safe profile defaults that preserve persisted config shape (0.3333ms)
+✔ constructor composes partial runtimeEnv with explicit top-level overrides predictably (0.3173ms)
+✔ config manager merges nested overrides without dropping defaults (0.4873ms)
+✔ config manager deepMerge prefers override arrays and nullish handling is explicit (0.282ms)
+✔ config manager loadVocabulary returns an empty list when the vocabulary file is unreadable (9.1451ms)
+[Config] Failed to load vocabulary: Error: ENOENT: no such file or directory, open 'C:\path\that\does\not\exist\vocabulary.json'
+    at async open (node:internal/fs/promises:637:25)
+    at async Object.readFile (node:internal/fs/promises:1269:14)
+    at async ConfigManager.loadVocabulary (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\src\main\config\config-manager.js:98:20)
+    at async TestContext.<anonymous> (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\config-manager.test.js:165:22)
+    at async Test.run (node:internal/test_runner/test:1125:7)
+    at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\path\\that\\does\\not\\exist\\vocabulary.json'
+}
+[Config] Saved config to: C:\Users\rongh\AppData\Local\Temp\kory-whisper-config-yS5oVv\config.json
+[Config] Loaded config from: C:\Users\rongh\AppData\Local\Temp\kory-whisper-config-yS5oVv\config.json
+✔ config manager save and load persist merged config in the configured app directory (12.432ms)
+[Config] Saved config to: C:\Users\rongh\AppData\Local\Temp\kory-whisper-profile-defaults-xw47jD\darwin\config.json
+[Config] Loaded config from: C:\Users\rongh\AppData\Local\Temp\kory-whisper-profile-defaults-xw47jD\darwin\config.json
+[Config] Saved config to: C:\Users\rongh\AppData\Local\Temp\kory-whisper-profile-defaults-xw47jD\win32\config.json
+[Config] Loaded config from: C:\Users\rongh\AppData\Local\Temp\kory-whisper-profile-defaults-xw47jD\win32\config.json
+✔ first-run load persists profile defaults for darwin and win32 configs (13.3215ms)
+✔ persist stores a capture in a timestamped directory under the provided root (31.6478ms)
+✔ persist prunes the oldest captures beyond the retention count of three (31.8031ms)
+✔ persist tolerates a missing optional source artifact and records the missing path (10.1257ms)
+✔ persist logs and surfaces a real copy failure (6.2751ms)
+✔ persist logs best-effort retention cleanup failures without aborting the capture (16.3284ms)
+✔ persist leaves foreign directories alone and does not count them against retention (14.9729ms)
+✔ persist rolls back a partial capture directory when copying fails (3.762ms)
+✔ persist rolls back a partial capture directory when meta write fails (5.1155ms)
+✔ persist rejects an invalid Date object with the explicit timestamp error (0.9832ms)
+✔ separate store instances can persist the same timestamp without capture directory collisions (9.7843ms)
+✔ retention keeps the newest three same-timestamp captures across store instances (15.6112ms)
+✔ retention still prunes when an older capture is missing meta.json after restart (15.9828ms)
+✔ startRecordingFeedback marks recording only after recorder start succeeds (2.3529ms)
+✔ announceOutputReady updates tray success without waiting for cue completion (0.4235ms)
+✔ distribution manifest centralizes bundled binary naming and packaged assets (3.2242ms)
+✔ distribution manifest keeps unsupported packaged quadrants behind explicit prerequisites (2.1543ms)
+✔ electron-builder config sources platform resource slots from the distribution manifest (0.4503ms)
+✔ distribution manifest darwin packaged binary maps to a file that exists in this worktree (0.4344ms)
+✔ bundled asset helpers stay aligned with packaged runtime path resolution (0.6659ms)
+✔ bundled asset helpers fail explicitly for unsupported packaged win32 binaries (0.2751ms)
+[Input] Text copied to clipboard: 你好世界 
+✔ normalizeTextForClipboard preserves sentence-final punctuation and respects appendSpace false (1.6579ms)
+✔ deliverTextToClipboard copies processed text without reading previous clipboard content (2.2891ms)
+✔ deliverTextToClipboard skips empty text without touching the clipboard (0.3066ms)
+✔ shared Whisper model paths resolve under the user-space .kory-whisper models directory (1.8198ms)
+✔ packaged runs expose a bundled seed path while development runs do not (0.3555ms)
+✔ model path helpers fail fast when modelName is undefined (1.1675ms)
+✔ platform selector reports the active runtime platform flags consistently (1.0751ms)
+✔ platform entrypoint resolves the darwin profile, adapter family, and capabilities (1.0593ms)
+✔ platform entrypoint resolves the win32 profile, adapter family, and capabilities (0.2713ms)
+✔ platform entrypoint fails fast on unsupported platforms instead of mixing identities (0.5411ms)
+✔ platform selector returns adapter instances with the expected public methods (0.527ms)
+✔ win32 audio recorder stop resolves even when stdin is unavailable (8.8487ms)
+✔ repo hardgate passes against the current repository state (24.9708ms)
+✔ repo hardgate formats violations with rule id and remediation detail (0.2466ms)
+✔ repo hardgate rejects direct service-layer process.platform access (15.4552ms)
+✔ repo hardgate rejects destructured service-layer platform aliases (12.2612ms)
+✔ repo hardgate allows destructuring platform from non-process objects (10.9411ms)
+✔ repo hardgate rejects bracket-based service-layer platform access (12.2277ms)
+✔ repo hardgate rejects optional-chaining service-layer platform access (11.4428ms)
+✔ repo hardgate ignores process.platform mentions in comments and strings (11.8566ms)
+✔ repo hardgate rejects platform adapter imports outside the selector (11.1969ms)
+✔ guarded coverage slice stays on the stable frozen seams instead of the whole main process (0.4405ms)
+✔ createRuntimeEnv resolves packaged runtime facts from injected Electron state (1.761ms)
+✔ runtime-capabilities narrows to runtime facts instead of platform policy declarations (0.3514ms)
+✔ createRuntimePaths resolves packaged darwin binaries and shared directories (2.4998ms)
+✔ createRuntimePaths resolves development win32 binary naming with the executable suffix (1.0862ms)
+✔ createRuntimePaths fails explicitly for unsupported packaged win32 binaries in the current repo state (0.5251ms)
+✔ test-keyboard self-test uses the active keyboard listener dependency (57.9067ms)
+✔ recording state clears any pending success reset timer (1.1035ms)
+[Whisper] Starting transcription...
+[Whisper] Audio file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-4SWr8J\sample.wav
+[Whisper] Command: /tmp/whisper-cli -m /tmp/model.bin -f C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-4SWr8J\sample.wav -l en -otxt -of C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-4SWr8J\sample --no-timestamps
+[Whisper] Executing whisper-cli...
+[Whisper] Execution completed in 0ms
+[Whisper] Looking for output file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-4SWr8J\sample.txt
+[Whisper] Output file read successfully
+[Whisper] Result: hello world
+✔ transcribe returns the output text when whisper-cli completes successfully (29.2476ms)
+[Whisper] Starting transcription...
+[Whisper] Audio file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-A4uAtO\sample.wav
+[Whisper] Command: /tmp/whisper-cli -m /tmp/model.bin -f C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-A4uAtO\sample.wav -l zh -otxt -of C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-A4uAtO\sample --no-timestamps --prompt 自定义。请使用简体中文输出。Gemini。
+[Whisper] Executing whisper-cli...
+[Whisper] stderr: stderr summary
+[Whisper] Execution completed in 0ms
+[Whisper] stdout: stdout summary
+[Whisper] Looking for output file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-A4uAtO\sample.txt
+[Whisper] Output file read successfully
+[Whisper] Result: 繁体 Gemini
+✔ transcribe persists the effective prompt, args, stdout and raw text before cleanup on success (18.7518ms)
+[Whisper] Starting transcription...
+[Whisper] Audio file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-CUXTaJ\sample.wav
+[Whisper] Command: /tmp/whisper-cli -m /tmp/model.bin -f C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-CUXTaJ\sample.wav -l zh -otxt -of C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-CUXTaJ\sample --no-timestamps --prompt 请使用简体中文输出。
+[Whisper] Executing whisper-cli...
+[Whisper] Execution completed in 0ms
+[Whisper] Process error: Error: Command failed because it timed out
+    at WhisperEngine.modelPath (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:204:21)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\src\main\whisper-engine.js:82:7
+    at new Promise (<anonymous>)
+    at WhisperEngine.transcribe (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\src\main\whisper-engine.js:78:12)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:216:22
+    at waitForActual (node:assert:632:21)
+    at strict.rejects (node:assert:769:31)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:215:20
+    at withMockedExecFile (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:17:11)
+    at TestContext.<anonymous> (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:203:11) {
+  killed: true,
+  signal: 'SIGTERM'
+}
+[Whisper] stderr: process timed out after 60000ms
+✔ transcribe persists failure evidence before cleanup when whisper-cli exits with an error (16.4887ms)
+[Whisper] Starting transcription...
+[Whisper] Audio file: C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-C5Cjvk\sample.wav
+[Whisper] Command: /tmp/whisper-cli -m /tmp/model.bin -f C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-C5Cjvk\sample.wav -l zh -otxt -of C:\Users\rongh\AppData\Local\Temp\kory-whisper-engine-C5Cjvk\sample --no-timestamps --prompt 请使用简体中文输出。
+[Whisper] Executing whisper-cli...
+[Whisper] Execution completed in 0ms
+[Whisper] Process error: Error: Command failed because it timed out
+    at WhisperEngine.modelPath (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:244:21)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\src\main\whisper-engine.js:82:7
+    at new Promise (<anonymous>)
+    at WhisperEngine.transcribe (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\src\main\whisper-engine.js:78:12)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:255:22
+    at waitForActual (node:assert:632:21)
+    at strict.rejects (node:assert:769:31)
+    at C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:254:20
+    at withMockedExecFile (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:17:11)
+    at TestContext.<anonymous> (C:\Users\rongh\code\Kory_whisper\.worktrees\windows-runtime-decoupling\tests\whisper-engine.test.js:243:11) {
+  killed: true,
+  signal: 'SIGTERM'
+}
+[Whisper] stderr: process timed out after 60000ms
+✔ transcribe rejects partial output when whisper-cli exits with an error (6.0113ms)
+ℹ tests 78
+ℹ suites 0
+ℹ pass 78
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 268.5669

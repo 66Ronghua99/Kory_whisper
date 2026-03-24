@@ -7,7 +7,8 @@ const repoRoot = path.resolve(__dirname, '..');
 const srcRoot = path.join(repoRoot, 'src');
 
 const JS_IMPORT_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)|import\s+(?:.+?\s+from\s+)?['"]([^'"]+)['"]/g;
-const PLATFORM_LEAF_PATTERN = /src\/main\/platform\/.+-(darwin|win32)\.js$/;
+const PLATFORM_ADAPTER_PATTERN = /^src\/main\/platform\/adapters\/.+\.js$/;
+const PLATFORM_LEGACY_SELECTOR_PATTERN = /^src\/main\/platform\/(?:audio|input|audio-cues)-(?:darwin|win32)\.js$/;
 const RENDERER_FORBIDDEN_PATTERNS = [
   {
     id: 'renderer-child-process',
@@ -82,6 +83,178 @@ function collectImports(filePath, content) {
   return imports;
 }
 
+function tokenizeJavaScript(source) {
+  const tokens = [];
+  let i = 0;
+
+  while (i < source.length) {
+    const char = source[i];
+    const next = source[i + 1];
+
+    if (/\s/.test(char)) {
+      i += 1;
+      continue;
+    }
+
+    if (char === '/' && next === '/') {
+      i += 2;
+      while (i < source.length && source[i] !== '\n') {
+        i += 1;
+      }
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      i += 2;
+      while (i < source.length) {
+        if (source[i] === '*' && source[i + 1] === '/') {
+          i += 2;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      const quote = char;
+      let value = '';
+      i += 1;
+
+      while (i < source.length) {
+        const current = source[i];
+        if (current === '\\') {
+          value += current;
+          i += 1;
+          if (i < source.length) {
+            value += source[i];
+            i += 1;
+          }
+          continue;
+        }
+
+        if (current === quote) {
+          i += 1;
+          break;
+        }
+
+        value += current;
+        i += 1;
+      }
+
+      tokens.push({ type: 'string', value });
+      continue;
+    }
+
+    if (/[A-Za-z_$]/.test(char)) {
+      let value = char;
+      i += 1;
+      while (i < source.length && /[A-Za-z0-9_$]/.test(source[i])) {
+        value += source[i];
+        i += 1;
+      }
+      tokens.push({ type: 'identifier', value });
+      continue;
+    }
+
+    tokens.push({ type: 'punctuation', value: char });
+    i += 1;
+  }
+
+  return tokens;
+}
+
+function findMatchingPunctuation(tokens, startIndex, openValue, closeValue) {
+  let depth = 0;
+
+  for (let index = startIndex; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.type !== 'punctuation') {
+      continue;
+    }
+
+    if (token.value === openValue) {
+      depth += 1;
+      continue;
+    }
+
+    if (token.value === closeValue) {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function hasServicePlatformBranch(content) {
+  const tokens = tokenizeJavaScript(content);
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const current = tokens[index];
+    const next = tokens[index + 1];
+    const afterNext = tokens[index + 2];
+    const afterAfterNext = tokens[index + 3];
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '.' &&
+      afterNext?.type === 'identifier' && afterNext.value === 'platform'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '?' &&
+      afterNext?.type === 'punctuation' && afterNext.value === '.' &&
+      afterAfterNext?.type === 'identifier' && afterAfterNext.value === 'platform'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && current.value === 'process' &&
+      next?.type === 'punctuation' && next.value === '[' &&
+      afterNext?.type === 'string' && afterNext.value === 'platform' &&
+      afterAfterNext?.type === 'punctuation' && afterAfterNext.value === ']'
+    ) {
+      return true;
+    }
+
+    if (
+      current?.type === 'identifier' && ['const', 'let', 'var'].includes(current.value) &&
+      next?.type === 'punctuation' && next.value === '{'
+    ) {
+      const closingBraceIndex = findMatchingPunctuation(tokens, index + 1, '{', '}');
+      if (closingBraceIndex === -1) {
+        continue;
+      }
+
+      const equalsToken = tokens[closingBraceIndex + 1];
+      const sourceToken = tokens[closingBraceIndex + 2];
+      if (
+        equalsToken?.type !== 'punctuation' ||
+        equalsToken.value !== '=' ||
+        sourceToken?.type !== 'identifier' ||
+        sourceToken.value !== 'process'
+      ) {
+        continue;
+      }
+
+      const destructuringTokens = tokens.slice(index + 2, closingBraceIndex);
+      const hasPlatformBinding = destructuringTokens.some((token) => token.type === 'identifier' && token.value === 'platform');
+      if (hasPlatformBinding) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function analyzeRepository() {
   const violations = [];
   const files = listFiles(srcRoot);
@@ -97,29 +270,30 @@ function analyzeRepository() {
       }
 
       const importedRepoPath = toRepoPath(fileImport.resolved);
-      const isPlatformLeaf = PLATFORM_LEAF_PATTERN.test(importedRepoPath);
+      const importsPlatformAdapter = PLATFORM_ADAPTER_PATTERN.test(importedRepoPath);
+      const importsLegacyPlatformLeaf = PLATFORM_LEGACY_SELECTOR_PATTERN.test(importedRepoPath);
+      const importsSelectorOwnedPlatformLeaf = importsPlatformAdapter || importsLegacyPlatformLeaf;
 
       if (
         repoPath === 'src/main/index.js' &&
-        importedRepoPath.startsWith('src/main/platform/') &&
-        importedRepoPath !== 'src/main/platform/index.js'
+        importsSelectorOwnedPlatformLeaf
       ) {
         violations.push({
           ruleId: 'LTD-001',
           file: repoPath,
-          detail: `Main entry imports platform leaf "${fileImport.specifier}". Import "./platform" instead.`
+          detail: `Main entry imports selector-owned platform module "${fileImport.specifier}". Import "./platform" instead.`
         });
       }
 
       if (
-        isPlatformLeaf &&
+        importsSelectorOwnedPlatformLeaf &&
         repoPath !== 'src/main/platform/index.js' &&
         !repoPath.startsWith('tests/')
       ) {
         violations.push({
           ruleId: 'LTD-002',
           file: repoPath,
-          detail: `Only src/main/platform/index.js may import platform leaf "${fileImport.specifier}". Route adapter selection through the platform selector.`
+          detail: `Only src/main/platform/index.js may import platform adapters or legacy selector-owned leaves such as "${fileImport.specifier}". Route selection through the platform selector.`
         });
       }
     }
@@ -134,6 +308,14 @@ function analyzeRepository() {
           });
         }
       }
+    }
+
+    if (repoPath.startsWith('src/main/services/') && hasServicePlatformBranch(content)) {
+      violations.push({
+        ruleId: 'LTD-004',
+        file: repoPath,
+        detail: 'Business-service modules must resolve runtime platform facts before branching instead of reading process.platform directly.'
+      });
     }
   }
 

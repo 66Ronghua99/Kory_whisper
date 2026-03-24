@@ -183,6 +183,12 @@ class WhisperEngine {
     }
   }
 
+  async stop() {
+    if (this.localLLM && typeof this.localLLM.stopServer === 'function') {
+      await this.localLLM.stopServer();
+    }
+  }
+
   buildPrompt(vocabulary) {
     const promptParts = [];
 

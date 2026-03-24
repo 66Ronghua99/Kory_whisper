@@ -1,3 +1,1 @@
-# Next Step
-
-Write the next follow-up spec/plan to bring `shortcut-manager` under automated proof, because `whisper-engine` now has focused regression coverage for partial-output failure handling and debug-capture persistence.
+Write the first Windows implementation loop plan for `src/main/platform/profiles/win32-profile.js` and `src/main/platform/adapters/win32/*`, then execute that plan with tests and evidence.

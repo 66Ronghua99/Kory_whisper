@@ -5,6 +5,121 @@ const os = require('node:os');
 const path = require('node:path');
 
 const ConfigManager = require('../src/main/config-manager.js');
+const CanonicalConfigManager = require('../src/main/config/config-manager.js');
+const { createConfigDefaults } = require('../src/main/config/config-defaults.js');
+const {
+  resolveConfigProfileDefaults
+} = require('../src/main/config/config-profile-defaults.js');
+
+test('top-level config manager stays as a compatibility shim for the canonical config home', () => {
+  assert.equal(ConfigManager, CanonicalConfigManager);
+});
+
+test('base config defaults stay platform-neutral until profile defaults are applied', () => {
+  const defaults = createConfigDefaults({
+    homeDir: '/tmp/kory-home',
+    vocabPath: '/tmp/kory-home/vocabulary.json'
+  });
+
+  assert.equal(defaults.shortcut.key, undefined);
+  assert.equal(defaults.input.method, undefined);
+  assert.equal(defaults.shortcut.longPressDuration, 500);
+  assert.equal(defaults.audioCues.recordingStartSound, 'Tink');
+  assert.equal(defaults.whisper.modelPath, '/tmp/kory-home/.kory-whisper/models/ggml-base.bin');
+  assert.equal(defaults.vocabulary.path, '/tmp/kory-home/vocabulary.json');
+});
+
+test('canonical config manager merges platform profile defaults without changing the persisted config shape', () => {
+  const darwinConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'darwin',
+      homeDir: '/tmp/kory-darwin'
+    }
+  });
+
+  const win32ConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'win32',
+      homeDir: 'C:\\Users\\tester'
+    }
+  });
+
+  const darwinDefaults = darwinConfigManager.getDefaultConfig();
+  const win32Defaults = win32ConfigManager.getDefaultConfig();
+
+  assert.equal(darwinDefaults.shortcut.key, 'RIGHT COMMAND');
+  assert.equal(darwinDefaults.input.method, 'applescript');
+  assert.equal(win32Defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(win32Defaults.input.method, 'clipboard');
+  assert.equal(win32Defaults.shortcut.enabled, true);
+  assert.equal(win32Defaults.audioCues.outputReadySound, 'Glass');
+  assert.deepEqual(Object.keys(win32Defaults).sort(), Object.keys(darwinDefaults).sort());
+});
+
+test('profile defaults can come from explicit profile input instead of hard-coded platform branches', () => {
+  const defaults = resolveConfigProfileDefaults({
+    runtimeEnv: { platform: 'darwin' },
+    profile: {
+      configDefaults: {
+        shortcut: {
+          key: 'F13'
+        },
+        input: {
+          method: 'clipboard'
+        }
+      }
+    }
+  });
+
+  assert.deepEqual(defaults, {
+    shortcut: {
+      key: 'F13'
+    },
+    input: {
+      method: 'clipboard'
+    }
+  });
+});
+
+test('unsupported platforms fall back to safe profile defaults that preserve persisted config shape', () => {
+  const configManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'linux',
+      homeDir: '/tmp/kory-linux'
+    }
+  });
+
+  const defaults = configManager.getDefaultConfig();
+
+  assert.equal(defaults.shortcut.key, 'RIGHT COMMAND');
+  assert.equal(defaults.input.method, 'applescript');
+});
+
+test('constructor composes partial runtimeEnv with explicit top-level overrides predictably', () => {
+  const configManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'win32',
+      homeDir: 'C:\\Users\\env-home',
+      resourcesPath: 'C:\\env-resources'
+    },
+    homeDir: '/tmp/override-home',
+    resourcesPath: '/tmp/override-resources',
+    configDir: '/tmp/custom-config-dir',
+    vocabPath: '/tmp/custom-config-dir/custom-vocabulary.json'
+  });
+
+  const defaults = configManager.getDefaultConfig();
+
+  assert.equal(configManager.runtimeEnv.platform, 'win32');
+  assert.equal(configManager.runtimeEnv.homeDir, '/tmp/override-home');
+  assert.equal(configManager.runtimeEnv.resourcesPath, '/tmp/override-resources');
+  assert.equal(configManager.configDir, '/tmp/custom-config-dir');
+  assert.equal(configManager.configPath, '/tmp/custom-config-dir/config.json');
+  assert.equal(configManager.vocabPath, '/tmp/custom-config-dir/custom-vocabulary.json');
+  assert.equal(defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(defaults.whisper.modelPath, '/tmp/override-home/.kory-whisper/models/ggml-base.bin');
+  assert.equal(defaults.vocabulary.path, '/tmp/custom-config-dir/custom-vocabulary.json');
+});
 
 test('config manager merges nested overrides without dropping defaults', () => {
   const configManager = new ConfigManager();
@@ -82,6 +197,43 @@ test('config manager save and load persist merged config in the configured app d
 
     const vocabFile = JSON.parse(await fs.readFile(configManager.vocabPath, 'utf8'));
     assert.deepEqual(vocabFile, { words: [], replacements: {} });
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('first-run load persists profile defaults for darwin and win32 configs', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-profile-defaults-'));
+  const darwinDir = path.join(tempDir, 'darwin');
+  const win32Dir = path.join(tempDir, 'win32');
+  const darwinConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'darwin',
+      homeDir: path.join(tempDir, 'darwin-home')
+    },
+    configDir: darwinDir,
+    vocabPath: path.join(darwinDir, 'vocabulary.json')
+  });
+  const win32ConfigManager = new CanonicalConfigManager({
+    runtimeEnv: {
+      platform: 'win32',
+      homeDir: path.join(tempDir, 'win32-home')
+    },
+    configDir: win32Dir,
+    vocabPath: path.join(win32Dir, 'vocabulary.json')
+  });
+
+  try {
+    await darwinConfigManager.load();
+    await win32ConfigManager.load();
+
+    const darwinSaved = JSON.parse(await fs.readFile(darwinConfigManager.configPath, 'utf8'));
+    const win32Saved = JSON.parse(await fs.readFile(win32ConfigManager.configPath, 'utf8'));
+
+    assert.equal(darwinSaved.shortcut.key, 'RIGHT COMMAND');
+    assert.equal(darwinSaved.input.method, 'applescript');
+    assert.equal(win32Saved.shortcut.key, 'RIGHT CONTROL');
+    assert.equal(win32Saved.input.method, 'clipboard');
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

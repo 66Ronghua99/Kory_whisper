@@ -98,6 +98,10 @@ class ShortcutManager extends EventEmitter {
     }
   }
 
+  async start() {
+    return this.init();
+  }
+
   handleKeyDown() {
     // 开始长按计时
     this.pressTimer = setTimeout(() => {
@@ -141,6 +145,10 @@ class ShortcutManager extends EventEmitter {
     }
     this.isKeyDown = false;
     this.isRecording = false;
+  }
+
+  stop() {
+    return this.destroy();
   }
 }
 
