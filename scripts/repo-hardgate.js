@@ -8,6 +8,7 @@ const srcRoot = path.join(repoRoot, 'src');
 
 const JS_IMPORT_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)|import\s+(?:.+?\s+from\s+)?['"]([^'"]+)['"]/g;
 const PLATFORM_ADAPTER_PATTERN = /^src\/main\/platform\/adapters\/.+\.js$/;
+const PLATFORM_LEGACY_SELECTOR_PATTERN = /^src\/main\/platform\/(?:audio|input|audio-cues)-(?:darwin|win32)\.js$/;
 const RENDERER_FORBIDDEN_PATTERNS = [
   {
     id: 'renderer-child-process',
@@ -270,27 +271,29 @@ function analyzeRepository() {
 
       const importedRepoPath = toRepoPath(fileImport.resolved);
       const importsPlatformAdapter = PLATFORM_ADAPTER_PATTERN.test(importedRepoPath);
+      const importsLegacyPlatformLeaf = PLATFORM_LEGACY_SELECTOR_PATTERN.test(importedRepoPath);
+      const importsSelectorOwnedPlatformLeaf = importsPlatformAdapter || importsLegacyPlatformLeaf;
 
       if (
         repoPath === 'src/main/index.js' &&
-        importedRepoPath.startsWith('src/main/platform/adapters/')
+        importsSelectorOwnedPlatformLeaf
       ) {
         violations.push({
           ruleId: 'LTD-001',
           file: repoPath,
-          detail: `Main entry imports platform adapter "${fileImport.specifier}". Import "./platform" instead.`
+          detail: `Main entry imports selector-owned platform module "${fileImport.specifier}". Import "./platform" instead.`
         });
       }
 
       if (
-        importsPlatformAdapter &&
+        importsSelectorOwnedPlatformLeaf &&
         repoPath !== 'src/main/platform/index.js' &&
         !repoPath.startsWith('tests/')
       ) {
         violations.push({
           ruleId: 'LTD-002',
           file: repoPath,
-          detail: `Only src/main/platform/index.js may import platform adapters such as "${fileImport.specifier}". Route adapter selection through the platform selector.`
+          detail: `Only src/main/platform/index.js may import platform adapters or legacy selector-owned leaves such as "${fileImport.specifier}". Route selection through the platform selector.`
         });
       }
     }

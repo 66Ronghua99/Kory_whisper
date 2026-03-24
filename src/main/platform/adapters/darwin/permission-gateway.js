@@ -51,6 +51,11 @@ class PermissionGatewayDarwin {
       return;
     }
 
+    if (surface === 'input-monitoring') {
+      systemPreferences.openSystemPreferences('security', 'Privacy_ListenEvent');
+      return;
+    }
+
     systemPreferences.openSystemPreferences('security', 'Privacy_Accessibility');
   }
 }

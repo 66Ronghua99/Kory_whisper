@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const vm = require('node:vm');
 const { EventEmitter } = require('events');
 
 const platform = require('../src/main/platform/index.js');
@@ -16,6 +17,24 @@ const Win32AudioRecorder = require('../src/main/platform/adapters/win32/audio-re
 const Win32InputInjector = require('../src/main/platform/adapters/win32/input-injector.js');
 const Win32AudioCuePlayer = require('../src/main/platform/adapters/win32/audio-cue-player.js');
 const Win32PermissionGateway = require('../src/main/platform/adapters/win32/permission-gateway.js');
+
+function loadPlatformModuleFor(platformName) {
+  const filePath = path.join(__dirname, '..', 'src', 'main', 'platform', 'index.js');
+  const source = fs.readFileSync(filePath, 'utf8');
+  const module = { exports: {} };
+  const localRequire = (specifier) => {
+    if (specifier.startsWith('.')) {
+      return require(path.resolve(path.dirname(filePath), specifier));
+    }
+
+    return require(specifier);
+  };
+  const wrappedSource = `(function (exports, require, module, __filename, __dirname, process) { ${source}\n})`;
+  const factory = vm.runInThisContext(wrappedSource, { filename: filePath });
+
+  factory(module.exports, localRequire, module, filePath, path.dirname(filePath), { platform: platformName });
+  return module.exports;
+}
 
 test('platform selector reports the active runtime platform flags consistently', () => {
   assert.equal(typeof platform.platform, 'string');
@@ -61,6 +80,17 @@ test('platform entrypoint resolves the win32 profile, adapter family, and capabi
 test('platform entrypoint fails fast on unsupported platforms instead of mixing identities', () => {
   assert.throws(
     () => platform.createPlatformApi({ platform: 'linux' }),
+    /Unsupported platform: linux/
+  );
+});
+
+test('platform entrypoint can load on unsupported hosts without resolving the default platform eagerly', () => {
+  const linuxPlatformModule = loadPlatformModuleFor('linux');
+
+  assert.equal(typeof linuxPlatformModule.createPlatformApi, 'function');
+  assert.equal(typeof linuxPlatformModule.resolvePlatform, 'function');
+  assert.throws(
+    () => linuxPlatformModule.platform,
     /Unsupported platform: linux/
   );
 });

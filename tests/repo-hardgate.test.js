@@ -149,6 +149,21 @@ test('repo hardgate rejects platform adapter imports outside the selector', () =
   );
 });
 
+test('repo hardgate rejects legacy platform leaf imports outside the selector', () => {
+  withTempServiceModule(
+    '__temp-platform-legacy-import.js',
+    "const recorder = require('../platform/audio-darwin.js');\nmodule.exports = recorder;\n",
+    () => {
+      const violations = analyzeRepository();
+      const selectorViolation = violations.find((violation) => violation.ruleId === 'LTD-002');
+
+      assert.ok(selectorViolation, 'expected a legacy platform leaf import violation');
+      assert.equal(selectorViolation.file, 'src/main/services/__temp-platform-legacy-import.js');
+      assert.match(selectorViolation.detail, /platform selector/);
+    }
+  );
+});
+
 test('guarded coverage slice stays on the stable frozen seams instead of the whole main process', () => {
   const coverageConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '.c8rc.json'), 'utf8'));
   const includeSet = coverageConfig.include;

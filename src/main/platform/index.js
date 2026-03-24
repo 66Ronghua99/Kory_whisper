@@ -81,8 +81,49 @@ function createPlatformApi(options = {}) {
   };
 }
 
-module.exports = {
-  ...createPlatformApi(),
+let defaultPlatformApi = null;
+
+function getDefaultPlatformApi() {
+  if (!defaultPlatformApi) {
+    defaultPlatformApi = createPlatformApi();
+  }
+
+  return defaultPlatformApi;
+}
+
+const platformExports = {
   createPlatformApi,
-  resolvePlatform
+  resolvePlatform,
+  getAudioRecorder(adapterOptions) {
+    return getDefaultPlatformApi().getAudioRecorder(adapterOptions);
+  },
+  getInputSimulator(adapterOptions) {
+    return getDefaultPlatformApi().getInputSimulator(adapterOptions);
+  },
+  getAudioCuePlayer(adapterOptions) {
+    return getDefaultPlatformApi().getAudioCuePlayer(adapterOptions);
+  },
+  getPermissionGateway(adapterOptions) {
+    return getDefaultPlatformApi().getPermissionGateway(adapterOptions);
+  }
 };
+
+for (const propertyName of [
+  'platform',
+  'resolvedPlatform',
+  'isMac',
+  'isWindows',
+  'isLinux',
+  'profile',
+  'capabilities',
+  'adapterFamily'
+]) {
+  Object.defineProperty(platformExports, propertyName, {
+    enumerable: true,
+    get() {
+      return getDefaultPlatformApi()[propertyName];
+    }
+  });
+}
+
+module.exports = platformExports;

@@ -17,15 +17,15 @@
 ### Canonical Ownership Model
 
 - `src/main/index.js` may depend on `src/main/app/`, but it should not own the workflow graph.
-- `src/main/platform/index.js` is the only production module allowed to select `src/main/platform/adapters/**`.
+- `src/main/platform/index.js` is the only production module allowed to select `src/main/platform/adapters/**` or the remaining legacy OS leaf modules under `src/main/platform/`.
 - `src/main/services/` should consume injected runtime/profile facts instead of reading `process.platform`.
 - Clipboard delivery remains the canonical output-path boundary for platform input adapters.
 
 ## Current Truth
 
 - The repository now has a repo-boundary hardgate and a guarded coverage ratchet.
-- The hardgate blocks `src/main/index.js` from reaching platform adapters directly.
-- The hardgate blocks non-selector production files from importing platform adapters directly.
+- The hardgate blocks `src/main/index.js` from reaching selector-owned platform modules directly.
+- The hardgate blocks non-selector production files from importing platform adapters or remaining legacy selector-owned platform leaves directly.
 - The hardgate blocks direct `process.platform` branching inside `src/main/services/`.
 - Tests cover the frozen seams around runtime, config, platform selection, and distribution truth.
 - Automated coverage is intentionally meaningful only for the stable seam subset, not for the whole Electron bootstrap path.
@@ -51,8 +51,8 @@
 
 | Invariant Id | Target Model | Current Truth | Drift Prevented | Proof Type |
 | --- | --- | --- | --- | --- |
-| `LTD-001` | `src/main/index.js` depends only on `src/main/platform/index.js` for adapter selection | Automated proof exists | Main-process orchestration reaching into platform adapter leaves directly | lint |
-| `LTD-002` | Only `src/main/platform/index.js` selects `src/main/platform/adapters/**` | Automated proof exists | Platform adapter selection leaking into workflow files | lint |
+| `LTD-001` | `src/main/index.js` depends only on `src/main/platform/index.js` for platform implementation selection | Automated proof exists | Main-process orchestration reaching into selector-owned platform leaves directly | lint |
+| `LTD-002` | Only `src/main/platform/index.js` selects `src/main/platform/adapters/**` and the remaining legacy OS leaf modules | Automated proof exists | Platform implementation selection leaking into workflow files | lint |
 | `LTD-003` | Renderer files do not reach child-process, global keyboard, or bundled binary surfaces directly | Automated proof exists | UI layer collapsing into runtime/system API behavior | lint |
 | `LTD-004` | Business-service modules do not branch directly on `process.platform` | Automated proof exists | Runtime/platform policy leaking into service orchestration | lint |
 | `LTD-005` | Guarded seam coverage stays honest and narrow | Slice coverage is explicit now | Silent erosion of the only currently testable architecture slice | behavior test + coverage gate |
@@ -61,8 +61,8 @@
 
 | Invariant Id | Target Model | Current Truth | Drift Prevented | Rule Mechanism | Severity Now | Severity Target | Exception Ledger Ref | Ratchet Trigger | Remediation Signal |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `LTD-001` | Main entry imports `./platform` only | Enforced | Direct adapter-leaf imports from the composition root | `scripts/repo-hardgate.js` | error | error | none | none | Import `./platform` instead of platform adapters |
-| `LTD-002` | Platform selector is the singleton adapter owner | Enforced | Adapter selection leaking into workflow files | `scripts/repo-hardgate.js` | error | error | none | none | Route adapter creation through `src/main/platform/index.js` |
+| `LTD-001` | Main entry imports `./platform` only | Enforced | Direct selector-owned platform-leaf imports from the composition root | `scripts/repo-hardgate.js` | error | error | none | none | Import `./platform` instead of selector-owned platform modules |
+| `LTD-002` | Platform selector is the singleton platform-implementation owner | Enforced | Adapter or legacy selector-leaf selection leaking into workflow files | `scripts/repo-hardgate.js` | error | error | none | none | Route platform implementation selection through `src/main/platform/index.js` |
 | `LTD-003` | Renderer stays on UI + IPC responsibilities | Enforced | Renderer reaching runtime/system APIs directly | `scripts/repo-hardgate.js` | error | error | none | none | Move runtime/system access behind IPC or platform helpers |
 | `LTD-004` | Business services stay platform-agnostic | Enforced | `process.platform` branching inside service orchestration | `scripts/repo-hardgate.js` | error | error | none | none | Resolve runtime/profile facts before branching |
 
@@ -79,8 +79,8 @@
 
 | Invariant Id | Canonical Owner Or Boundary | Proof Mechanism | Current Phase | Failure Signal | Remediation Signal | Exception Ledger Ref |
 | --- | --- | --- | --- | --- | --- | --- |
-| `LTD-001` | `src/main/index.js` owns orchestration, not platform adapter selection | Static import scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports direct import of `src/main/platform/adapters/**` from `src/main/index.js` | Replace adapter import with `require('./platform')` | none |
-| `LTD-002` | `src/main/platform/index.js` is the adapter selector singleton | Static import scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports non-selector production file importing platform adapters | Route selection through the platform selector | none |
+| `LTD-001` | `src/main/index.js` owns orchestration, not platform implementation selection | Static import scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports direct import of selector-owned platform modules from `src/main/index.js` | Replace the import with `require('./platform')` | none |
+| `LTD-002` | `src/main/platform/index.js` is the platform selector singleton | Static import scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports non-selector production file importing platform adapters or legacy selector-owned leaves | Route selection through the platform selector | none |
 | `LTD-003` | Renderer remains UI-oriented | Static content scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports renderer use of forbidden runtime modules or binaries | Move system access to the main process and expose it via IPC | none |
 | `LTD-004` | `src/main/services/` stays platform-agnostic | Token-based content scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports `process.platform`, destructured aliases, or bracket access inside a service module | Resolve runtime/profile facts first, then branch outside the service layer | none |
 
@@ -104,13 +104,13 @@
 
 - `src/main/index.js` imports `./platform` and asks it for adapters.
 - `src/main/services/dictation-service.js` consumes injected runtime/profile facts and never reads `process.platform`.
-- `src/main/platform/index.js` selects adapters from `src/main/platform/adapters/**`.
+- `src/main/platform/index.js` selects adapters from `src/main/platform/adapters/**` and remains the singleton owner for any surviving legacy OS leaf modules.
 - `src/renderer/settings.html` uses `ipcRenderer` for config save/load without invoking `child_process`.
 
 ### Failing
 
 - A service file branches on `process.platform` to decide which input path to take.
-- A workflow file imports `src/main/platform/adapters/win32/audio-recorder.js` directly.
+- A workflow file imports `src/main/platform/adapters/win32/audio-recorder.js` or `src/main/platform/audio-darwin.js` directly.
 - A renderer file requires `child_process` to shell out to `whisper-cli`.
 - A new testable helper in the guarded slice lands without enough test proof and drops coverage below threshold.
 
