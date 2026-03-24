@@ -76,7 +76,7 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
   await fs.writeFile(vocabPath, JSON.stringify({ words: ['Gemini'] }), 'utf8');
   let persistedCapture = null;
 
-  const expectedPrompt = '自定义。请使用简体中文输出。Gemini。';
+  const expectedPrompt = '自定义。Gemini。';
   const expectedArgs = [
     '-m', '/tmp/model.bin',
     '-f', audioPath,
@@ -153,6 +153,19 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
     await fs.rm(tempDir, { recursive: true, force: true });
     await fs.rm(captureRoot, { recursive: true, force: true });
   }
+});
+
+test('simplified output stays in post-processing instead of injecting a style instruction into whisper prompt', async () => {
+  const WhisperEngine = require('../src/main/whisper-engine.js');
+  const engine = new WhisperEngine({
+    language: 'zh',
+    outputScript: 'simplified',
+    prompt: '自定义',
+    enablePunctuation: false
+  });
+
+  assert.equal(engine.buildPrompt(['Gemini']), '自定义。Gemini。');
+  assert.equal(await engine.postProcessText('繁體輸出'), '繁体输出');
 });
 
 test('transcribe persists failure evidence before cleanup when whisper-cli exits with an error', async () => {

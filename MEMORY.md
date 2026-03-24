@@ -125,8 +125,26 @@ macOS 需要以下权限：
 
 **解决方案**:
 1. 引入 `opencc-js`，在转写结果阶段执行繁转简（`twp -> cn` + `hk -> cn`）。
-2. 在 prompt 中附加“请使用简体中文输出”作为模型侧约束。
+2. 简体输出约束收敛到后处理阶段，不再依赖把自然语言指令塞进 `whisper-cli --prompt`。
 3. 新增配置项 `whisper.outputScript`，默认 `simplified`，并在设置页提供切换（简体/繁体/原样）。
+
+### 2026-03-24 Whisper prompt echo（简体中文指令被原样抄回）
+**现象**:
+1. 用户明明说了一段中文，`raw.txt` / 最终转写却变成 `请使用简体中文输出。`
+2. debug capture 里的 `audio.wav` 时长和振幅正常，但带 prompt 与不带 prompt 的 CLI 结果完全不同。
+
+**根因**:
+1. `whisper-cli` 对 prompt 非常敏感，把风格性指令 `请使用简体中文输出` 当成了可续写文本。
+2. 当录音较轻、口语里又夹杂英文术语时，模型更容易回声式地复读 prompt 开头。
+
+**解决方案**:
+1. 不再把“请使用简体中文输出”注入 `whisper-cli --prompt`。
+2. 简繁输出要求只保留在 `postProcessText()` 的 OpenCC 后处理阶段。
+3. 词表和用户自定义 prompt 仍可继续进入 CLI prompt，避免丢掉专有词提示能力。
+
+**验证**:
+- 证据目录: `artifacts/whisper-prompt-echo/`
+- 复现样本: `~/.kory-whisper/debug-captures/2026-03-24T01-00-19-022Z-154c09d7db61/`
 
 ### 2026-03-05 术语识别与断句稳定性优化
 **现象**:

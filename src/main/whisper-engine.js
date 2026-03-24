@@ -190,12 +190,8 @@ class WhisperEngine {
       promptParts.push(this.prompt.trim());
     }
 
-    if (this.shouldUseSimplifiedChinese()) {
-      promptParts.push('请使用简体中文输出');
-    }
-
     if (vocabulary && vocabulary.length > 0) {
-      // Whisper 对 prompt 敏感，可以帮助识别特定词汇
+      // Keep the CLI prompt focused on lexical hints to reduce prompt-echo misfires.
       promptParts.push(vocabulary.join('，'));
     }
 
