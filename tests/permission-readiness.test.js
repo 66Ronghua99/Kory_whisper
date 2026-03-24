@@ -101,3 +101,49 @@ test('includes a refresh marker on every snapshot', () => {
   assert.equal(typeof snapshot.refreshedAt, 'string');
   assert.ok(snapshot.refreshedAt.length > 0);
 });
+
+test('contracts can narrow the active blocked surface set and produce ordered snapshots', () => {
+  const snapshot = buildPermissionReadiness.buildPermissionReadinessWithContract(
+    {
+      microphone: { granted: true },
+      accessibility: { granted: false },
+      inputMonitoring: { status: 'missing' }
+    },
+    {
+      surfaces: [
+        {
+          key: 'microphone',
+          onboardingLabel: '麦克风',
+          menuLabel: '麦克风',
+          settingsTarget: 'microphone',
+          actionLabel: '麦克风设置'
+        }
+      ],
+      surfaceOrder: ['microphone']
+    }
+  );
+
+  assert.equal(snapshot.surfaces.microphone.status, 'granted');
+  assert.equal(snapshot.surfaceOrder.join(','), 'microphone');
+  assert.equal(snapshot.isReady, true);
+  assert.equal(snapshot.firstRunNeedsOnboarding, false);
+  assert.deepEqual(Object.keys(snapshot.surfaceContract), ['microphone']);
+});
+
+test('contract defaults only use provided surfaces when explicitly provided as empty list', () => {
+  const snapshot = buildPermissionReadiness.buildPermissionReadinessWithContract(
+    {
+      microphone: { granted: false },
+      accessibility: { granted: false },
+      inputMonitoring: { status: 'missing' }
+    },
+    {
+      surfaces: [],
+      surfaceOrder: []
+    }
+  );
+
+  assert.equal(snapshot.surfaces.microphone.status, 'missing');
+  assert.equal(snapshot.surfaceOrder.length, 0);
+  assert.deepEqual(snapshot.surfaceContract, {});
+});

@@ -199,8 +199,8 @@
 <body>
   <div class="container">
     <div class="hero">
-      <h1>Kory Whisper 权限引导</h1>
-      <p class="lead">完成麦克风、辅助功能和输入监控后，语音输入才会进入可用状态。</p>
+      <h1 id="onboarding-title">Kory Whisper 权限引导</h1>
+      <p class="lead" id="onboarding-lead">完成麦克风、辅助功能和输入监控后，语音输入才会进入可用状态。</p>
     </div>
 
     <div class="section">
@@ -212,141 +212,276 @@
         </div>
         <button class="btn-secondary" id="refresh-permissions" type="button">重新检查权限</button>
       </div>
-      <div class="permission-grid">
-        <article class="permission-card" data-permission-surface="microphone">
-          <h3>麦克风</h3>
-          <span class="permission-status" id="microphone-status">未检查</span>
-          <p class="permission-why">用于录制你说的话，并把声音送进转写流程。</p>
-          <p class="permission-reason" id="microphone-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="microphone-action" type="button">打开麦克风设置</button>
-          </div>
-        </article>
-        <article class="permission-card" data-permission-surface="accessibility">
-          <h3>辅助功能</h3>
-          <span class="permission-status" id="accessibility-status">未检查</span>
-          <p class="permission-why">用于把转写结果输入到当前应用，并维持快捷键控制。</p>
-          <p class="permission-reason" id="accessibility-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="accessibility-action" type="button">打开辅助功能设置</button>
-          </div>
-        </article>
-        <article class="permission-card" data-permission-surface="inputMonitoring">
-          <h3>输入监控</h3>
-          <span class="permission-status" id="inputMonitoring-status">未检查</span>
-          <p class="permission-why">用于监听全局快捷键，让你在任意应用里启动语音输入。</p>
-          <p class="permission-reason" id="inputMonitoring-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="inputMonitoring-action" type="button">打开输入监控设置</button>
-          </div>
-        </article>
-      </div>
+      <div class="permission-grid" id="permission-grid"></div>
     </div>
   </div>
 
   <script>
     const { ipcRenderer } = require('electron');
 
-    const SURFACES = [
+    const FALLBACK_SURFACES = [
       {
         key: 'microphone',
-        label: '麦克风',
-        reasonId: 'microphone-reason',
-        statusId: 'microphone-status',
-        actionId: 'microphone-action',
+        label: 'Microphone',
+        onboardingLabel: '麦克风',
+        menuLabel: '麦克风',
+        actionLabel: '打开麦克风设置',
         why: '用于录制你说的话，并把声音送进转写流程。'
       },
       {
         key: 'accessibility',
-        label: '辅助功能',
-        reasonId: 'accessibility-reason',
-        statusId: 'accessibility-status',
-        actionId: 'accessibility-action',
+        label: 'Accessibility',
+        onboardingLabel: '辅助功能',
+        menuLabel: '辅助功能',
+        actionLabel: '打开辅助功能设置',
         why: '用于把转写结果输入到当前应用，并维持快捷键控制。'
       },
       {
         key: 'inputMonitoring',
-        label: '输入监控',
-        reasonId: 'inputMonitoring-reason',
-        statusId: 'inputMonitoring-status',
-        actionId: 'inputMonitoring-action',
+        label: 'Input Monitoring',
+        onboardingLabel: '输入监控',
+        menuLabel: '输入监控',
+        actionLabel: '打开输入监控设置',
         why: '用于监听全局快捷键，让你在任意应用里启动语音输入。'
       }
     ];
 
-    function formatStatusText(surface) {
-      switch (surface.status) {
-        case 'granted':
-          return '已授权';
-        case 'missing':
-          return '未授权';
-        case 'unsupported':
-          return '系统不支持';
-        case 'unknown':
-        default:
-          return '状态未知';
+    const FALLBACK_CONTRACT = {
+      surfaces: FALLBACK_SURFACES,
+      surfaceOrder: ['microphone', 'accessibility', 'inputMonitoring'],
+      onboarding: {
+        title: 'Kory Whisper 权限引导',
+        lead: '完成麦克风、辅助功能和输入监控后，语音输入才会进入可用状态。',
+        statusLabels: {
+          granted: '已授权',
+          missing: '未授权',
+          unknown: '状态未知',
+          unsupported: '系统不支持'
+        },
+        readySummary: '当前平台权限已满足。',
+        blockedSummary: '还有权限需要处理，完成后点击重新检查。',
+        noPermissionMessage: '当前平台不需要额外权限配置。'
+      },
+      menu: {
+        openPermissionSetupLabel: 'Open Permission Setup',
+        recheckPermissionsLabel: 'Re-check Permissions'
       }
+    };
+
+    const permissionContractState = {
+      contract: FALLBACK_CONTRACT
+    };
+
+    function mergePermissionContract(rawContract = {}) {
+      const contract = rawContract && typeof rawContract === 'object' ? rawContract : {};
+      const hasExplicitSurfaces = Object.prototype.hasOwnProperty.call(contract, 'surfaces') && Array.isArray(contract.surfaces);
+      const hasExplicitSurfaceOrder = Object.prototype.hasOwnProperty.call(contract, 'surfaceOrder') && Array.isArray(contract.surfaceOrder);
+      const mergedSurfaces = hasExplicitSurfaces ? contract.surfaces : FALLBACK_SURFACES;
+      const mergedSurfaceOrder = hasExplicitSurfaceOrder
+        ? contract.surfaceOrder
+        : Array.isArray(mergedSurfaces) && mergedSurfaces.length > 0
+          ? mergedSurfaces.map((surface) => surface.key).filter(Boolean)
+          : [];
+
+      return {
+        ...FALLBACK_CONTRACT,
+        ...contract,
+        surfaces: Array.isArray(mergedSurfaces) ? mergedSurfaces : FALLBACK_CONTRACT.surfaces,
+        surfaceOrder: mergedSurfaceOrder,
+        onboarding: {
+          ...FALLBACK_CONTRACT.onboarding,
+          ...(contract.onboarding || {})
+        },
+        menu: {
+          ...FALLBACK_CONTRACT.menu,
+          ...(contract.menu || {})
+        }
+      };
     }
 
-    function applyStatusClass(element, surface) {
-      element.className = `permission-status is-${surface.status || 'unknown'}`;
+    function getContractSurfaceOrder(contract = {}) {
+      const hasExplicitSurfaceOrder = Object.prototype.hasOwnProperty.call(contract, 'surfaceOrder') && Array.isArray(contract.surfaceOrder);
+      if (hasExplicitSurfaceOrder) {
+        return contract.surfaceOrder;
+      }
+
+      if (Array.isArray(contract.surfaces) && contract.surfaces.length > 0) {
+        return contract.surfaces.map((surface) => surface.key).filter(Boolean);
+      }
+
+      return FALLBACK_CONTRACT.surfaceOrder;
     }
 
-    function renderPermissionSummary(readiness) {
+    function getSurfaceConfig(contract = {}, key) {
+      if (Array.isArray(contract.surfaces)) {
+        const exact = contract.surfaces.find((surface) => surface && surface.key === key);
+        if (exact) {
+          return exact;
+        }
+      }
+
+      return FALLBACK_SURFACES.find((surface) => surface.key === key) || null;
+    }
+
+    function getPermissionStatusLabel(surface) {
+      const statusLabels = permissionContractState.contract.onboarding?.statusLabels || FALLBACK_CONTRACT.onboarding.statusLabels;
+      return statusLabels[surface.status] || statusLabels.unknown;
+    }
+
+    function getReadableSurfaceLabel(surfaceConfig, surfaceName) {
+      return (
+        surfaceConfig && (surfaceConfig.onboardingLabel || surfaceConfig.label || surfaceConfig.menuLabel)
+      )
+        ? (surfaceConfig.onboardingLabel || surfaceConfig.label || surfaceConfig.menuLabel)
+        : surfaceName;
+    }
+
+    function clearPermissionCards() {
+      const grid = document.getElementById('permission-grid');
+      grid.innerHTML = '';
+    }
+
+    function renderSurfaceCard(surfaceConfig, surface, surfaceName) {
+      const card = document.createElement('article');
+      card.className = 'permission-card';
+      card.setAttribute('data-permission-surface', surfaceName);
+      card.dataset.permissionSurface = surfaceName;
+
+      const heading = document.createElement('h3');
+      heading.textContent = getReadableSurfaceLabel(surfaceConfig, surfaceName);
+
+      const statusElement = document.createElement('span');
+      statusElement.className = `permission-status is-${surface.status || 'unknown'}`;
+      statusElement.textContent = getPermissionStatusLabel(surface);
+
+      const reasonIntro = document.createElement('p');
+      reasonIntro.className = 'permission-why';
+      reasonIntro.textContent = surfaceConfig.why || '';
+
+      const reasonElement = document.createElement('p');
+      reasonElement.className = 'permission-reason';
+      reasonElement.textContent = surface.reason
+        ? `当前状态说明: ${surface.reason}.`
+        : '';
+
+      const actions = document.createElement('div');
+      actions.className = 'permission-actions';
+
+      const actionButton = document.createElement('button');
+      actionButton.className = 'btn-primary';
+      actionButton.type = 'button';
+      actionButton.disabled = surface.status === 'unsupported';
+      actionButton.textContent = surface.status === 'unsupported'
+        ? '系统不支持'
+        : (surfaceConfig.actionLabel || `打开${getReadableSurfaceLabel(surfaceConfig, surfaceName)}设置`);
+      actionButton.onclick = () => {
+        if (surface.status === 'unsupported') {
+          return;
+        }
+        ipcRenderer.invoke('open-permission-settings', surface.settingsTarget);
+      };
+
+      actions.appendChild(actionButton);
+
+      card.appendChild(heading);
+      card.appendChild(statusElement);
+      card.appendChild(reasonIntro);
+      card.appendChild(reasonElement);
+      card.appendChild(actions);
+
+      return card;
+    }
+
+    function renderPermissionMetadata(readiness) {
+      const onboardingContract = permissionContractState.contract.onboarding || FALLBACK_CONTRACT.onboarding;
+      const title = onboardingContract.title || FALLBACK_CONTRACT.onboarding.title;
+      const lead = onboardingContract.lead || FALLBACK_CONTRACT.onboarding.lead;
+
+      document.getElementById('onboarding-title').textContent = title;
+      document.getElementById('onboarding-lead').textContent = lead;
+
       const summary = document.getElementById('permission-summary');
       const updatedAt = document.getElementById('permission-updated-at');
-
       summary.textContent = readiness.isReady
-        ? '三个权限都已就绪，可以继续使用语音输入。'
-        : '还有权限需要处理，完成后点击重新检查。';
+        ? (onboardingContract.readySummary || '当前平台权限已满足。')
+        : (onboardingContract.blockedSummary || '还有权限需要处理，完成后点击重新检查。');
       updatedAt.textContent = `最后刷新: ${new Date(readiness.refreshedAt).toLocaleString()}`;
     }
 
-    function renderSurface(surfaceConfig, readiness) {
-      const surface = readiness.surfaces[surfaceConfig.key] || {};
-      const statusElement = document.getElementById(surfaceConfig.statusId);
-      const reasonElement = document.getElementById(surfaceConfig.reasonId);
-      const actionElement = document.getElementById(surfaceConfig.actionId);
+    function renderSurfaces(readiness) {
+      const grid = document.getElementById('permission-grid');
+      clearPermissionCards();
 
-      statusElement.textContent = formatStatusText(surface);
-      applyStatusClass(statusElement, surface);
-      reasonElement.textContent = surface.reason
-        ? `${surfaceConfig.why} 当前状态: ${surface.reason}.`
-        : surfaceConfig.why;
-      actionElement.disabled = surface.status === 'unsupported';
-      actionElement.textContent = surface.status === 'unsupported'
-        ? '系统不支持'
-        : `打开${surfaceConfig.label}设置`;
-      actionElement.onclick = () => {
-        ipcRenderer.invoke('open-permission-settings', surface.settingsTarget);
-      };
+      const contract = permissionContractState.contract;
+      const surfaceOrder = getContractSurfaceOrder(contract);
+      let renderedCount = 0;
+
+      surfaceOrder.forEach((surfaceName) => {
+        const surfaceConfig = getSurfaceConfig(contract, surfaceName);
+        if (!surfaceConfig || !surfaceConfig.key) {
+          return;
+        }
+
+        const surface = readiness.surfaces[surfaceName] || { status: 'unknown' };
+        if (!surface.status) {
+          surface.status = 'unknown';
+        }
+        surface.settingsTarget = surface.settingsTarget || surfaceConfig.settingsTarget || surfaceName;
+        surface.status = surface.status || 'unknown';
+
+        renderedCount += 1;
+        grid.appendChild(renderSurfaceCard(surfaceConfig, surface, surfaceName));
+      });
+
+      if (renderedCount === 0) {
+        const fallback = (contract.onboarding || FALLBACK_CONTRACT.onboarding).noPermissionMessage || FALLBACK_CONTRACT.onboarding.noPermissionMessage;
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = fallback;
+        grid.appendChild(empty);
+      }
+    }
+
+    async function loadPermissionContract() {
+      try {
+        const appConfig = await ipcRenderer.invoke('get-config');
+        const contract = appConfig?.platformContract?.permission
+          ? appConfig.platformContract.permission
+          : FALLBACK_CONTRACT;
+        permissionContractState.contract = mergePermissionContract(contract);
+      } catch {
+        permissionContractState.contract = FALLBACK_CONTRACT;
+      }
     }
 
     async function refreshPermissions() {
       const readiness = await ipcRenderer.invoke('get-permission-readiness');
-      renderPermissionSummary(readiness);
-      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+      renderPermissionMetadata(readiness);
+      renderSurfaces(readiness);
     }
 
     async function recheckPermissions() {
       const readiness = await ipcRenderer.invoke('recheck-permission-readiness');
-      renderPermissionSummary(readiness);
-      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+      renderPermissionMetadata(readiness);
+      renderSurfaces(readiness);
     }
 
     document.getElementById('refresh-permissions').addEventListener('click', recheckPermissions);
     ipcRenderer.on('permission-readiness-updated', (event, readiness) => {
-      renderPermissionSummary(readiness);
-      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+      renderPermissionMetadata(readiness);
+      renderSurfaces(readiness);
     });
+
     window.addEventListener('focus', () => {
       recheckPermissions().catch((error) => {
         document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;
       });
     });
 
-    refreshPermissions().catch((error) => {
-      document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;
+    loadPermissionContract().then(() => {
+      refreshPermissions().catch((error) => {
+        document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;
+      });
     });
   </script>
 </body>

@@ -1975,3 +1975,48 @@ test('lifecycle module owns Electron event registration and shutdown cleanup', a
     'bootstrap:dispose'
   ]);
 });
+
+test('composition root exposes platform ui contract through get-config payload', () => {
+  const contract = {
+    permission: {
+      surfaces: [
+        {
+          key: 'microphone',
+          onboardingLabel: '麦克风'
+        }
+      ],
+      surfaceOrder: ['microphone']
+    }
+  };
+
+  const root = createCompositionRoot({
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    platformApi: {
+      profile: {
+        uiContract: contract
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT COMMAND', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: true },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      load: async () => {},
+      sanitizeForRenderer(config) {
+        return config;
+      },
+      save: async () => {}
+    }
+  });
+
+  const contractFromRoot = root.getPlatformPermissionContract();
+
+  assert.deepEqual(contractFromRoot, contract);
+});

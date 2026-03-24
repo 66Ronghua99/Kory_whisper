@@ -204,3 +204,37 @@ test('permission service applies runtime overrides on top of gateway readiness',
   assert.equal(snapshot.isReady, true);
   assert.equal(snapshot.surfaces.inputMonitoring.status, 'granted');
 });
+
+test('permission service applies platform contract metadata while building readiness', async () => {
+  const permissionService = new PermissionService({
+    permissionGateway: {
+      check: async () => ({
+        microphone: { granted: false, canRequest: false },
+        accessibility: { granted: true },
+        inputMonitoring: { status: 'granted' }
+      })
+    },
+    permissionContract: {
+      permission: {
+        surfaces: [
+          {
+            key: 'microphone',
+            label: '麦克风',
+            onboardingLabel: '麦克风',
+            menuLabel: '麦克风',
+            actionLabel: '打开麦克风设置'
+          }
+        ],
+        surfaceOrder: ['microphone']
+      }
+    }
+  });
+
+  const snapshot = await permissionService.getReadiness();
+
+  assert.equal(snapshot.isReady, false);
+  assert.deepEqual(snapshot.surfaceOrder, ['microphone']);
+  assert.equal(snapshot.surfaces.microphone.status, 'missing');
+  assert.equal(snapshot.surfaces.microphone.settingsTarget, 'microphone');
+  assert.equal(snapshot.surfaces.accessibility.status, 'granted');
+});

@@ -5,6 +5,14 @@ class PermissionService {
     this.permissionGateway = options.permissionGateway;
     this.dialog = options.dialog || null;
     this.runtimeSurfaceStatuses = {};
+    this.permissionContract = options.permissionContract || null;
+  }
+
+  getPermissionContractPayload() {
+    const contract = this.permissionContract || {};
+    return contract && typeof contract === 'object' && contract.permission
+      ? contract.permission
+      : contract;
   }
 
   async check() {
@@ -17,15 +25,30 @@ class PermissionService {
 
   async getReadiness() {
     const rawFacts = await this.permissionGateway.check();
-    return this.applyRuntimeOverrides(buildPermissionReadiness(rawFacts));
+    return this.applyRuntimeOverrides(this.getContractedReadiness(rawFacts));
   }
 
   async recheckReadiness() {
     if (typeof this.permissionGateway.recheckReadiness === 'function') {
-      return this.applyRuntimeOverrides(buildPermissionReadiness(await this.permissionGateway.recheckReadiness()));
+      return this.applyRuntimeOverrides(this.getContractedReadiness(await this.permissionGateway.recheckReadiness()));
     }
 
     return this.getReadiness();
+  }
+
+  getContractedReadiness(rawFacts = {}) {
+    if (typeof buildPermissionReadiness.buildPermissionReadinessWithContract === 'function') {
+      return buildPermissionReadiness.buildPermissionReadinessWithContract(
+        rawFacts,
+        this.getPermissionContractPayload()
+      );
+    }
+
+    return buildPermissionReadiness(rawFacts);
+  }
+
+  getPermissionContract() {
+    return this.permissionContract || {};
   }
 
   setRuntimeSurfaceStatus(surfaceName, status) {
@@ -77,7 +100,7 @@ class PermissionService {
     const rawFacts = typeof this.permissionGateway.ensure === 'function'
       ? await this.permissionGateway.ensure()
       : await this.permissionGateway.check();
-    const readiness = buildPermissionReadiness(rawFacts);
+    const readiness = this.getContractedReadiness(rawFacts);
 
     if (readiness.isReady) {
       return readiness;
@@ -103,7 +126,7 @@ class PermissionService {
     const rawFacts = typeof this.permissionGateway.ensure === 'function'
       ? await this.permissionGateway.ensure()
       : await this.permissionGateway.check();
-    const ensuredReadiness = buildPermissionReadiness(rawFacts);
+    const ensuredReadiness = this.getContractedReadiness(rawFacts);
 
     if (ensuredReadiness.surfaces.microphone.status !== 'granted') {
       await this.showMicrophoneWarning();

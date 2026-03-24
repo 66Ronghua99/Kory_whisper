@@ -370,3 +370,42 @@ test('tray service dispose falls back to dispose when destroy is unavailable', (
 
   assert.deepEqual(events, ['dispose']);
 });
+
+test('tray menu reads labels and action text from permission contract', () => {
+  const { TrayManager, captured } = loadTrayManager();
+  const manager = new TrayManager();
+  manager.tray = createTrayStub();
+
+  const contract = {
+    permission: {
+      menu: {
+        blockedHeader: '待完成配置',
+        blockedHint: '请先补齐以下权限',
+        openPermissionSetupLabel: '打开权限设置',
+        recheckPermissionsLabel: '重新核查权限'
+      },
+      surfaceOrder: ['accessibility'],
+      surfaces: [
+        {
+          key: 'accessibility',
+          menuLabel: '辅助功能',
+          actionLabel: '辅助功能设置'
+        }
+      ]
+    }
+  };
+
+  const readiness = createBlockedReadinessSnapshot();
+  readiness.surfaces.accessibility.status = 'missing';
+
+  manager.setPermissionReadiness(readiness, contract);
+  const template = captured.templates.at(-1);
+  const labels = getLabels(template);
+
+  assert(labels.includes('待完成配置'));
+  assert(labels.includes('请先补齐以下权限'));
+  assert(labels.includes('打开权限设置'));
+  assert(labels.includes('重新核查权限'));
+  assert(labels.includes('辅助功能设置'));
+  assert.equal(labels.includes('Open Microphone Settings'), false);
+});
