@@ -335,6 +335,15 @@
     }
 
     document.getElementById('refresh-permissions').addEventListener('click', recheckPermissions);
+    ipcRenderer.on('permission-readiness-updated', (event, readiness) => {
+      renderPermissionSummary(readiness);
+      SURFACES.forEach((surfaceConfig) => renderSurface(surfaceConfig, readiness));
+    });
+    window.addEventListener('focus', () => {
+      recheckPermissions().catch((error) => {
+        document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;
+      });
+    });
 
     refreshPermissions().catch((error) => {
       document.getElementById('permission-summary').textContent = `读取失败: ${error.message}`;

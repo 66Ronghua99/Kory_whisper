@@ -92,6 +92,7 @@ class TrayManager extends EventEmitter {
     this.permissionReadiness = readiness || null;
     this.applyStateVisuals();
     this.updateContextMenu();
+    this.pushPermissionReadinessToWindows();
   }
 
   showPermissionBlocked(readiness) {
@@ -367,6 +368,22 @@ class TrayManager extends EventEmitter {
     });
 
     return managedWindow;
+  }
+
+  pushPermissionReadinessToWindows() {
+    if (!this.permissionReadiness) {
+      return;
+    }
+
+    for (const windowInstance of [this.onboardingWindow]) {
+      if (!windowInstance || windowInstance.isDestroyed()) {
+        continue;
+      }
+
+      if (windowInstance.webContents && typeof windowInstance.webContents.send === 'function') {
+        windowInstance.webContents.send('permission-readiness-updated', this.permissionReadiness);
+      }
+    }
   }
 
   destroy() {

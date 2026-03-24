@@ -14,11 +14,7 @@ test('settings html replaces the old llm controls with one top-level ASR post-pr
   assert.match(settingsHtml, /id="outputScript"/);
   assert.match(settingsHtml, /id="useVocabulary"/);
   assert.match(settingsHtml, /id="enablePunctuation"/);
-  assert.match(settingsHtml, /id="permissions-section"/);
-  assert.match(settingsHtml, /data-permission-surface="microphone"/);
-  assert.match(settingsHtml, /data-permission-surface="accessibility"/);
-  assert.match(settingsHtml, /data-permission-surface="inputMonitoring"/);
-  assert.match(settingsHtml, /id="permissions-refresh"/);
+  assert.match(settingsHtml, /id="permissions-open-onboarding"/);
 
   assert.doesNotMatch(settingsHtml, /id="enableLlmPostprocess"/);
   assert.doesNotMatch(settingsHtml, /id="llmModel"/);
@@ -60,9 +56,10 @@ test('embedded settings script reads and writes postProcessing enabled without u
   assert.doesNotMatch(settingsHtml, /document\.getElementById\('llm/);
 });
 
-test('embedded settings script consumes the shared permission readiness endpoints for refresh and repair actions', () => {
-  assert.match(settingsHtml, /ipcRenderer\.invoke\('get-permission-readiness'\)/);
-  assert.match(settingsHtml, /ipcRenderer\.invoke\('recheck-permission-readiness'\)/);
-  assert.match(settingsHtml, /ipcRenderer\.invoke\('open-permission-settings'/);
-  assert.doesNotMatch(settingsHtml, /permissionStatus/);
+test('embedded settings script keeps permissions as a single onboarding entry point', () => {
+  assert.match(settingsHtml, /ipcRenderer\.invoke\('open-permission-onboarding'\)/);
+  assert.doesNotMatch(settingsHtml, /ipcRenderer\.invoke\('get-permission-readiness'\)/);
+  assert.doesNotMatch(settingsHtml, /ipcRenderer\.invoke\('recheck-permission-readiness'\)/);
+  assert.doesNotMatch(settingsHtml, /ipcRenderer\.invoke\('open-permission-settings'/);
+  assert.doesNotMatch(settingsHtml, /data-permission-surface="microphone"/);
 });

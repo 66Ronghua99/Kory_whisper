@@ -38,4 +38,5 @@ test('permission onboarding html reuses the shared permission IPC endpoints', ()
   assert.match(onboardingHtml, /ipcRenderer\.invoke\('get-permission-readiness'\)/);
   assert.match(onboardingHtml, /ipcRenderer\.invoke\('recheck-permission-readiness'\)/);
   assert.match(onboardingHtml, /ipcRenderer\.invoke\('open-permission-settings'/);
+  assert.match(onboardingHtml, /ipcRenderer\.on\('permission-readiness-updated'/);
 });

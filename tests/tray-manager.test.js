@@ -6,7 +6,8 @@ const TrayService = require('../src/main/services/tray-service.js');
 function loadTrayManager() {
   const originalLoad = Module._load;
   const captured = {
-    templates: []
+    templates: [],
+    windows: []
   };
 
   const electron = {
@@ -67,7 +68,41 @@ function loadTrayManager() {
         };
       }
     },
-    BrowserWindow: class FakeBrowserWindow {}
+    BrowserWindow: class FakeBrowserWindow {
+      constructor() {
+        this.handlers = {};
+        this.loadFileCalls = [];
+        this.webContents = {
+          sent: [],
+          send: (channel, payload) => {
+            this.webContents.sent.push([channel, payload]);
+          }
+        };
+        captured.windows.push(this);
+      }
+
+      loadFile(filePath) {
+        this.loadFileCalls.push(filePath);
+      }
+
+      on(eventName, handler) {
+        this.handlers[eventName] = handler;
+      }
+
+      isDestroyed() {
+        return false;
+      }
+
+      show() {}
+
+      focus() {}
+
+      close() {
+        if (this.handlers.closed) {
+          this.handlers.closed();
+        }
+      }
+    }
   };
 
   Module._load = function patchedLoad(request, parent, isMain) {
@@ -288,6 +323,22 @@ test('transient success or error states do not erase the underlying permission-b
     global.setTimeout = originalSetTimeout;
     global.clearTimeout = originalClearTimeout;
   }
+});
+
+test('tray manager pushes readiness updates into the dedicated onboarding window when it is open', () => {
+  const { TrayManager, captured } = loadTrayManager();
+  const manager = new TrayManager();
+  manager.tray = createTrayStub();
+
+  manager.showPermissionOnboarding();
+  const onboardingWindow = captured.windows.at(-1);
+  const readiness = createBlockedReadinessSnapshot();
+
+  manager.setPermissionReadiness(readiness);
+
+  assert.deepEqual(onboardingWindow.webContents.sent, [
+    ['permission-readiness-updated', readiness]
+  ]);
 });
 
 test('tray service dispose calls destroy when the tray manager exposes it', () => {

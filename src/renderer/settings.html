@@ -157,82 +157,6 @@
       display: block;
     }
 
-    .permission-summary {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-      padding: 12px 14px;
-      border-radius: 8px;
-      background: #f8fafc;
-    }
-
-    .permission-summary-text {
-      font-size: 13px;
-      color: #334155;
-    }
-
-    .permission-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 12px;
-    }
-
-    .permission-card {
-      border: 1px solid #eef2f7;
-      border-radius: 12px;
-      padding: 14px;
-      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
-      display: grid;
-      gap: 8px;
-    }
-
-    .permission-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .permission-status {
-      display: inline-flex;
-      align-items: center;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: #eef2ff;
-      color: #334155;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .permission-status.is-granted {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .permission-status.is-missing,
-    .permission-status.is-unknown {
-      background: #ffedd5;
-      color: #9a3412;
-    }
-
-    .permission-status.is-unsupported {
-      background: #f1f5f9;
-      color: #64748b;
-    }
-
-    .permission-why {
-      font-size: 12px;
-      color: #475569;
-    }
-
-    .permission-reason {
-      font-size: 12px;
-      color: #6b7280;
-      min-height: 1.8em;
-    }
-
     .permission-actions {
       display: flex;
       flex-wrap: wrap;
@@ -247,50 +171,13 @@
 
     <div class="section" id="permissions-section">
       <h2>权限</h2>
-      <div class="permission-summary">
+      <div class="field">
+        <p class="hint">权限排查和修复统一放在独立的权限引导窗口里，避免和设置页重复展示同一组信息。</p>
+      </div>
+      <div class="permission-actions">
         <div>
-          <div id="permission-summary" class="permission-summary-text">正在读取权限状态…</div>
-          <div id="permission-updated-at" class="hint"></div>
-        </div>
-        <div class="permission-actions">
-          <button class="btn-secondary" id="permissions-refresh" type="button">重新检查权限</button>
           <button class="btn-secondary" id="permissions-open-onboarding" type="button">打开权限引导</button>
         </div>
-      </div>
-      <div class="permission-grid">
-        <article class="permission-card" data-permission-surface="microphone">
-          <div class="permission-card-header">
-            <h3>麦克风</h3>
-            <span class="permission-status" id="microphone-status">未检查</span>
-          </div>
-          <p class="permission-why">用于录制你说的话，并把声音送进转写流程。</p>
-          <p class="permission-reason" id="microphone-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="microphone-action" type="button">打开麦克风设置</button>
-          </div>
-        </article>
-        <article class="permission-card" data-permission-surface="accessibility">
-          <div class="permission-card-header">
-            <h3>辅助功能</h3>
-            <span class="permission-status" id="accessibility-status">未检查</span>
-          </div>
-          <p class="permission-why">用于把转写结果输入到当前应用，并维持快捷键控制。</p>
-          <p class="permission-reason" id="accessibility-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="accessibility-action" type="button">打开辅助功能设置</button>
-          </div>
-        </article>
-        <article class="permission-card" data-permission-surface="inputMonitoring">
-          <div class="permission-card-header">
-            <h3>输入监控</h3>
-            <span class="permission-status" id="inputMonitoring-status">未检查</span>
-          </div>
-          <p class="permission-why">用于监听全局快捷键，让你在任意应用里启动语音输入。</p>
-          <p class="permission-reason" id="inputMonitoring-reason"></p>
-          <div class="permission-actions">
-            <button class="btn-primary" id="inputMonitoring-action" type="button">打开输入监控设置</button>
-          </div>
-        </article>
       </div>
     </div>
 
@@ -410,81 +297,6 @@
   <script>
     const { ipcRenderer } = require('electron');
 
-    const PERMISSION_SURFACES = [
-      {
-        key: 'microphone',
-        label: '麦克风',
-        settingsTarget: 'microphone',
-        statusId: 'microphone-status',
-        reasonId: 'microphone-reason',
-        actionId: 'microphone-action',
-        why: '用于录制你说的话，并把声音送进转写流程。'
-      },
-      {
-        key: 'accessibility',
-        label: '辅助功能',
-        settingsTarget: 'accessibility',
-        statusId: 'accessibility-status',
-        reasonId: 'accessibility-reason',
-        actionId: 'accessibility-action',
-        why: '用于把转写结果输入到当前应用，并维持快捷键控制。'
-      },
-      {
-        key: 'inputMonitoring',
-        label: '输入监控',
-        settingsTarget: 'input-monitoring',
-        statusId: 'inputMonitoring-status',
-        reasonId: 'inputMonitoring-reason',
-        actionId: 'inputMonitoring-action',
-        why: '用于监听全局快捷键，让你在任意应用里启动语音输入。'
-      }
-    ];
-
-    function formatPermissionStatus(surface) {
-      switch (surface.status) {
-        case 'granted':
-          return '已授权';
-        case 'missing':
-          return '未授权';
-        case 'unsupported':
-          return '系统不支持';
-        case 'unknown':
-        default:
-          return '状态未知';
-      }
-    }
-
-    function updatePermissionStatusClass(element, status) {
-      element.className = `permission-status is-${status || 'unknown'}`;
-    }
-
-    function renderPermissionSection(readiness) {
-      document.getElementById('permission-summary').textContent = readiness.isReady
-        ? '三个权限都已就绪，可以继续使用语音输入。'
-        : '还有权限需要处理，完成后点击重新检查。';
-      document.getElementById('permission-updated-at').textContent = `最后刷新: ${new Date(readiness.refreshedAt).toLocaleString()}`;
-
-      PERMISSION_SURFACES.forEach((surfaceConfig) => {
-        const surface = readiness.surfaces[surfaceConfig.key] || {};
-        const statusElement = document.getElementById(surfaceConfig.statusId);
-        const reasonElement = document.getElementById(surfaceConfig.reasonId);
-        const actionElement = document.getElementById(surfaceConfig.actionId);
-
-        statusElement.textContent = formatPermissionStatus(surface);
-        updatePermissionStatusClass(statusElement, surface.status);
-        reasonElement.textContent = surface.reason
-          ? `${surfaceConfig.why} 当前状态: ${surface.reason}.`
-          : surfaceConfig.why;
-        actionElement.disabled = surface.status === 'unsupported';
-        actionElement.textContent = surface.status === 'unsupported'
-          ? '系统不支持'
-          : `打开${surfaceConfig.label}设置`;
-        actionElement.onclick = () => {
-          ipcRenderer.invoke('open-permission-settings', surface.settingsTarget);
-        };
-      });
-    }
-
     async function loadConfig() {
       const config = await ipcRenderer.invoke('get-config');
 
@@ -500,16 +312,6 @@
       document.getElementById('audioCuesEnabled').checked = config.audioCues?.enabled !== false;
       document.getElementById('recordingStartSound').value = config.audioCues?.recordingStartSound || 'Tink';
       document.getElementById('outputReadySound').value = config.audioCues?.outputReadySound || 'Glass';
-    }
-
-    async function loadPermissionReadiness() {
-      const readiness = await ipcRenderer.invoke('get-permission-readiness');
-      renderPermissionSection(readiness);
-    }
-
-    async function refreshPermissionReadiness() {
-      const readiness = await ipcRenderer.invoke('recheck-permission-readiness');
-      renderPermissionSection(readiness);
     }
 
     function openPermissionOnboarding() {
@@ -586,11 +388,9 @@
       }, 3000);
     }
 
-    document.getElementById('permissions-refresh').addEventListener('click', refreshPermissionReadiness);
     document.getElementById('permissions-open-onboarding').addEventListener('click', openPermissionOnboarding);
 
     loadConfig();
-    loadPermissionReadiness();
   </script>
 </body>
 </html>
