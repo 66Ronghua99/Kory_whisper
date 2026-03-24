@@ -33,8 +33,6 @@
 ## Transition Model
 
 - Phase 1 keeps the honest guarded slice focused on the stable seam subset only:
-  - `src/main/config-manager.js`
-  - `src/main/model-paths.js`
   - `src/main/config/**`
   - `src/main/distribution/**`
   - `src/main/platform/index.js`
@@ -105,6 +103,7 @@
 - `src/main/index.js` imports `./platform` and asks it for adapters.
 - `src/main/services/dictation-service.js` consumes injected runtime/profile facts and never reads `process.platform`.
 - `src/main/platform/index.js` selects adapters from `src/main/platform/adapters/**` and remains the singleton owner for any surviving legacy OS leaf modules.
+- Config/runtime callers use `src/main/config/config-manager.js` and `src/main/shared/model-paths.js` directly instead of deleted top-level shims.
 - `src/renderer/settings.html` uses `ipcRenderer` for config save/load without invoking `child_process`.
 
 ### Failing

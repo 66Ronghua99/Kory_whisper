@@ -169,10 +169,42 @@ test('guarded coverage slice stays on the stable frozen seams instead of the who
   const includeSet = coverageConfig.include;
 
   assert.equal(coverageConfig.all, true);
-  assert.ok(includeSet.includes('src/main/config-manager.js'));
+  assert.equal(includeSet.includes('src/main/config-manager.js'), false);
+  assert.equal(includeSet.includes('src/main/model-paths.js'), false);
   assert.ok(includeSet.includes('src/main/platform/index.js'));
   assert.ok(includeSet.includes('src/main/runtime/runtime-capabilities.js'));
   assert.equal(includeSet.includes('src/main/app/bootstrap.js'), false);
   assert.equal(includeSet.includes('src/main/services/dictation-service.js'), false);
   assert.equal(includeSet.includes('src/main/platform/adapters/win32/audio-recorder.js'), false);
+});
+
+test('mac legacy runtime files are deleted once the canonical seams own the flow', () => {
+  const repoRoot = path.join(__dirname, '..');
+  const deletedRepoPaths = [
+    'src/main/legacy/audio-recorder-legacy.js',
+    'src/main/legacy/input-simulator-legacy.js',
+    'src/main/legacy/README.md',
+    'src/main/llm-postprocessor.js',
+    'src/main/local-llm.js',
+    'src/main/config-manager.js',
+    'src/main/model-paths.js'
+  ];
+
+  for (const repoPath of deletedRepoPaths) {
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, repoPath)),
+      false,
+      `expected ${repoPath} to be removed from the active repository shape`
+    );
+  }
+});
+
+test('composition root uses the canonical config manager path instead of the deleted shim', () => {
+  const compositionRootSource = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'main', 'app', 'composition-root.js'),
+    'utf8'
+  );
+
+  assert.match(compositionRootSource, /require\('\.\.\/config\/config-manager'\)/);
+  assert.doesNotMatch(compositionRootSource, /require\('\.\.\/config-manager'\)/);
 });

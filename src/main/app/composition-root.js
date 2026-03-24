@@ -104,7 +104,7 @@ class CompositionRoot {
   }
 
   createConfigManager(options = {}) {
-    const ConfigManager = require('../config-manager');
+    const ConfigManager = require('../config/config-manager');
     return new ConfigManager({
       runtimeEnv: this.runtimeEnv,
       profile: this.platformApi.profile,

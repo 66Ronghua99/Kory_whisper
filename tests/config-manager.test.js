@@ -4,17 +4,12 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 
-const ConfigManager = require('../src/main/config-manager.js');
-const CanonicalConfigManager = require('../src/main/config/config-manager.js');
+const ConfigManager = require('../src/main/config/config-manager.js');
 const { createConfigDefaults } = require('../src/main/config/config-defaults.js');
 const {
   resolveConfigProfileDefaults
 } = require('../src/main/config/config-profile-defaults.js');
 const { createPostProcessingContext } = require('../src/main/post-processing/context.js');
-
-test('top-level config manager stays as a compatibility shim for the canonical config home', () => {
-  assert.equal(ConfigManager, CanonicalConfigManager);
-});
 
 test('base config defaults stay platform-neutral until profile defaults are applied', () => {
   const defaults = createConfigDefaults({
@@ -31,14 +26,14 @@ test('base config defaults stay platform-neutral until profile defaults are appl
 });
 
 test('canonical config manager merges platform profile defaults without changing the persisted config shape', () => {
-  const darwinConfigManager = new CanonicalConfigManager({
+  const darwinConfigManager = new ConfigManager({
     runtimeEnv: {
       platform: 'darwin',
       homeDir: '/tmp/kory-darwin'
     }
   });
 
-  const win32ConfigManager = new CanonicalConfigManager({
+  const win32ConfigManager = new ConfigManager({
     runtimeEnv: {
       platform: 'win32',
       homeDir: 'C:\\Users\\tester'
@@ -83,7 +78,7 @@ test('profile defaults can come from explicit profile input instead of hard-code
 });
 
 test('unsupported platforms fall back to safe profile defaults that preserve persisted config shape', () => {
-  const configManager = new CanonicalConfigManager({
+  const configManager = new ConfigManager({
     runtimeEnv: {
       platform: 'linux',
       homeDir: '/tmp/kory-linux'
@@ -97,7 +92,7 @@ test('unsupported platforms fall back to safe profile defaults that preserve per
 });
 
 test('constructor composes partial runtimeEnv with explicit top-level overrides predictably', () => {
-  const configManager = new CanonicalConfigManager({
+  const configManager = new ConfigManager({
     runtimeEnv: {
       platform: 'win32',
       homeDir: 'C:\\Users\\env-home',
@@ -277,7 +272,7 @@ test('first-run load persists profile defaults for darwin and win32 configs', as
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-profile-defaults-'));
   const darwinDir = path.join(tempDir, 'darwin');
   const win32Dir = path.join(tempDir, 'win32');
-  const darwinConfigManager = new CanonicalConfigManager({
+  const darwinConfigManager = new ConfigManager({
     runtimeEnv: {
       platform: 'darwin',
       homeDir: path.join(tempDir, 'darwin-home')
@@ -285,7 +280,7 @@ test('first-run load persists profile defaults for darwin and win32 configs', as
     configDir: darwinDir,
     vocabPath: path.join(darwinDir, 'vocabulary.json')
   });
-  const win32ConfigManager = new CanonicalConfigManager({
+  const win32ConfigManager = new ConfigManager({
     runtimeEnv: {
       platform: 'win32',
       homeDir: path.join(tempDir, 'win32-home')
@@ -312,7 +307,7 @@ test('first-run load persists profile defaults for darwin and win32 configs', as
 
 test('legacy whisper llm config stays inert while postProcessing enabled and outputScript round-trip independently', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-config-'));
-  const configManager = new CanonicalConfigManager({
+  const configManager = new ConfigManager({
     configDir: tempDir,
     vocabPath: path.join(tempDir, 'vocabulary.json')
   });

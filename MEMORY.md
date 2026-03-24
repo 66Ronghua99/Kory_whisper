@@ -10,6 +10,8 @@
 - Post-processing cleanup now belongs in `src/main/post-processing/`; `src/main/whisper-engine.js` should stay limited to whisper-cli invocation and debug-capture ownership.
 - Renderer-facing config reads must sanitize legacy `whisper.llm`, and save paths must preserve hidden legacy config instead of dropping it on partial patches.
 - The shared Whisper model store is already canonical on `master`; future worktree reconciliation should compare against `src/main/shared/model-paths.js` before trying to re-merge old model-cache branches.
+- Do not recreate deleted top-level shims such as `src/main/config-manager.js` or `src/main/model-paths.js`; import the canonical config/shared modules directly.
+- The removed Mac-only legacy bucket and unused local/remote LLM post-process experiments are now outside the repo contract; keep them gone unless a new approved spec explicitly reintroduces them.
 
 ## Stable Lessons
 
@@ -20,3 +22,5 @@
 - Avoid natural-language style instructions in `whisper-cli --prompt`; keep script normalization in post-processing to avoid prompt-echo regressions.
 - Long-running Whisper failures should fail fast and preserve debug captures instead of returning partial `.txt` output as success.
 - `postProcessing.enabled` is the renderer-visible kill switch; stage-specific preferences can stay persisted even when the top-level switch is off.
+- The current permission UX target is: app may launch, but dictation stays `not ready` until Microphone, Accessibility, and Input Monitoring are all resolved; first run should auto-open dedicated onboarding, and the menu bar/settings surfaces must keep recovery visible afterward.
+- The approved implementation route for permission UX is: normalize permission facts into one shared readiness snapshot first, then drive tray/menu state, onboarding UI, settings visibility, and dictation guards from that single snapshot.

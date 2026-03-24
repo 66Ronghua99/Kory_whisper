@@ -13,7 +13,7 @@
 # Boundary & Ownership
 - `src/main/index.js`: 模型选择、下载、运行时配置切换。
 - `src/main/whisper-engine.js`: 转写参数与文本后处理入口。
-- `src/main/config-manager.js`: 配置默认值与兼容迁移。
+- `src/main/config/config-manager.js`: 配置默认值与兼容迁移。
 - `src/renderer/settings.html`: 模型与输出策略配置 UI。
 - `src/main/model-downloader.js`: 模型元信息与下载提示。
 

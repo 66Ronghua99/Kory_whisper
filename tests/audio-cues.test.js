@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 
 const AudioCuePlayerDarwin = require('../src/main/platform/audio-cues-darwin.js');
 const AudioCuePlayerWin32 = require('../src/main/platform/audio-cues-win32.js');
-const ConfigManager = require('../src/main/config-manager.js');
+const ConfigManager = require('../src/main/config/config-manager.js');
 
 test('darwin audio cue player uses Tink and Glass as the default system sounds', async () => {
   const commands = [];

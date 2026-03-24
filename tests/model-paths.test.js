@@ -5,7 +5,7 @@ const {
   getSharedModelsDir,
   getSharedModelPath,
   getBundledModelPath
-} = require('../src/main/model-paths.js');
+} = require('../src/main/shared/model-paths.js');
 
 test('shared Whisper model paths resolve under the user-space .kory-whisper models directory', () => {
   const homeDir = '/Users/tester';
