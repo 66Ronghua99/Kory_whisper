@@ -1,3 +1,8 @@
+const applyPostProcessingDefault = require('../post-processing/apply-pipeline');
+const createDefaultPipeline = require('../post-processing/create-default-pipeline');
+const { createPostProcessingContext: createPostProcessingContextDefault } = require('../post-processing/context');
+const { EMPTY_VOCABULARY_DATA, loadVocabularyData: loadVocabularyDataDefault } = require('../vocabulary-data');
+
 function resolveModelKey(model) {
   const validModels = ['base', 'small', 'medium'];
   return validModels.includes(model) ? model : 'base';
@@ -26,11 +31,42 @@ class TranscriptionService {
     this.whisperEngine = options.whisperEngine;
     this.ensureModelReady = options.ensureModelReady || null;
     this.resolveModelPath = options.resolveModelPath || null;
-    this.defaultVocabPath = options.defaultVocabPath || this.whisperEngine.vocabPath;
+    this.defaultVocabPath = options.defaultVocabPath || '';
+    this.config = options.config || {};
+    this.logger = options.logger || console;
+    this.loadVocabularyData = options.loadVocabularyData || loadVocabularyDataDefault;
+    this.createPostProcessingContext = options.createPostProcessingContext || createPostProcessingContextDefault;
+    this.applyPostProcessing = options.applyPostProcessing || applyPostProcessingDefault;
+    this.postProcessingPipeline = options.postProcessingPipeline || createDefaultPipeline();
   }
 
   async transcribe(audioPath) {
-    return this.whisperEngine.transcribe(audioPath);
+    const vocabularyData = await this.loadCurrentVocabularyData();
+    const rawText = await this.whisperEngine.transcribe(audioPath, {
+      vocabularyWords: vocabularyData.words
+    });
+
+    const postProcessingContext = this.createPostProcessingContext({
+      config: this.config,
+      runtime: {
+        language: this.config.whisper?.language,
+        outputScript: this.config.whisper?.outputScript
+      },
+      vocabulary: vocabularyData
+    });
+
+    return this.applyPostProcessing(rawText, postProcessingContext, {
+      pipeline: this.postProcessingPipeline,
+      logger: this.logger
+    });
+  }
+
+  async loadCurrentVocabularyData() {
+    const vocabPath = this.config.vocabulary?.path || this.defaultVocabPath;
+    if (this.config.vocabulary?.enabled === false) {
+      return EMPTY_VOCABULARY_DATA;
+    }
+    return this.loadVocabularyData(vocabPath);
   }
 
   updateRuntimeOptions(options = {}) {
@@ -40,6 +76,8 @@ class TranscriptionService {
   }
 
   async applyConfig(config = {}) {
+    this.config = config;
+
     const modelName = getModelFilename(config.whisper?.model);
     let modelPath = this.whisperEngine.modelPath;
 
@@ -56,12 +94,8 @@ class TranscriptionService {
 
     this.updateRuntimeOptions({
       modelPath,
-      vocabPath: config.vocabulary?.path || this.defaultVocabPath,
       language: config.whisper?.language || this.whisperEngine.language,
-      prompt: config.whisper?.prompt || '',
-      outputScript: config.whisper?.outputScript || 'simplified',
-      enablePunctuation: config.whisper?.enablePunctuation !== false,
-      llm: config.whisper?.llm || {}
+      prompt: config.whisper?.prompt || ''
     });
 
     this.defaultVocabPath = config.vocabulary?.path || this.defaultVocabPath;
@@ -192,7 +226,13 @@ async function prepareTranscriptionService(options = {}) {
   if (injectedWhisperEngine) {
     return new TranscriptionService({
       whisperEngine: injectedWhisperEngine,
-      defaultVocabPath: config.vocabulary?.path
+      config,
+      logger,
+      defaultVocabPath: config.vocabulary?.path,
+      loadVocabularyData: options.loadVocabularyData,
+      createPostProcessingContext: options.createPostProcessingContext,
+      applyPostProcessing: options.applyPostProcessing,
+      postProcessingPipeline: options.postProcessingPipeline
     });
   }
 
@@ -214,18 +254,16 @@ async function prepareTranscriptionService(options = {}) {
 
   const whisperEngine = new WhisperEngine({
     modelPath: runtimePaths.getSharedModelPath(modelName),
-    vocabPath: config.vocabulary?.path,
     language: config.whisper?.language || 'zh',
     prompt: config.whisper?.prompt || '',
-    outputScript: config.whisper?.outputScript || 'simplified',
-    enablePunctuation: config.whisper?.enablePunctuation !== false,
-    llm: config.whisper?.llm || {},
     whisperBin: runtimePaths.whisperBinPath,
     debugCaptureStore
   });
 
   return new TranscriptionService({
     whisperEngine,
+    config,
+    logger,
     defaultVocabPath: config.vocabulary?.path,
     ensureModelReady: (nextModelName) => ensureModelReady({
       modelName: nextModelName,
@@ -234,7 +272,11 @@ async function prepareTranscriptionService(options = {}) {
       dialog: options.dialog,
       BrowserWindow: options.BrowserWindow
     }),
-    resolveModelPath: (nextModelName) => runtimePaths.getSharedModelPath(nextModelName)
+    resolveModelPath: (nextModelName) => runtimePaths.getSharedModelPath(nextModelName),
+    loadVocabularyData: options.loadVocabularyData,
+    createPostProcessingContext: options.createPostProcessingContext,
+    applyPostProcessing: options.applyPostProcessing,
+    postProcessingPipeline: options.postProcessingPipeline
   });
 }
 

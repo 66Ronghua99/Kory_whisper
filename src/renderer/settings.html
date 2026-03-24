@@ -62,7 +62,6 @@
       color: #444;
     }
 
-    input[type="text"],
     input[type="number"],
     select {
       width: 100%;
@@ -216,6 +215,10 @@
         </select>
       </div>
       <div class="field checkbox-field">
+        <input type="checkbox" id="enablePostProcessing" checked>
+        <label for="enablePostProcessing">启用 ASR 后处理</label>
+      </div>
+      <div class="field checkbox-field">
         <input type="checkbox" id="useVocabulary" checked>
         <label for="useVocabulary">启用自定义词表</label>
       </div>
@@ -223,32 +226,8 @@
         <input type="checkbox" id="enablePunctuation" checked>
         <label for="enablePunctuation">启用断句和标点优化</label>
       </div>
-      <div class="field checkbox-field">
-        <input type="checkbox" id="enableLlmPostprocess">
-        <label for="enableLlmPostprocess">启用轻量 LLM 后处理（联网，可选）</label>
-      </div>
-      <div class="field">
-        <label for="llmModel">LLM 模型</label>
-        <input type="text" id="llmModel" value="gpt-4o-mini" placeholder="gpt-4o-mini">
-      </div>
-      <div class="field">
-        <label for="llmApiKey">LLM API Key（可选）</label>
-        <input type="password" id="llmApiKey" placeholder="留空则使用环境变量 KORY_LLM_API_KEY">
-      </div>
-      <div class="field">
-        <label for="llmTimeoutMs">LLM 超时上限 (毫秒)</label>
-        <input type="number" id="llmTimeoutMs" value="1200" min="300" max="5000" step="100">
-      </div>
-      <div class="field">
-        <label for="llmMinChars">最短触发字数</label>
-        <input type="number" id="llmMinChars" value="18" min="1" max="1000" step="1">
-      </div>
-      <div class="field">
-        <label for="llmMaxChars">最长触发字数</label>
-        <input type="number" id="llmMaxChars" value="180" min="10" max="2000" step="10">
-      </div>
       <p class="hint">词表文件位置: ~/.kory-whisper/vocabulary.json（支持 words + replacements）</p>
-      <p class="hint">启用 LLM 时可填写本地 API Key，或使用环境变量 `KORY_LLM_API_KEY`；超时后自动回退本地结果。</p>
+      <p class="hint">启用后会运行 v1 ASR 后处理；词表、断句和中文输出设置仍可独立调整。</p>
     </div>
 
     <div class="section">
@@ -297,25 +276,18 @@
   </div>
 
   <script>
-    const { ipcRenderer, shell } = require('electron');
+    const { ipcRenderer } = require('electron');
 
-    // 加载配置
     async function loadConfig() {
       const config = await ipcRenderer.invoke('get-config');
-      const llm = config.whisper?.llm || {};
 
       document.getElementById('shortcutKey').value = config.shortcut?.key || 'RIGHT COMMAND';
       document.getElementById('longPressDuration').value = config.shortcut?.longPressDuration || 500;
       document.getElementById('model').value = config.whisper?.model || 'base';
       document.getElementById('language').value = config.whisper?.language || 'zh';
       document.getElementById('outputScript').value = config.whisper?.outputScript || 'simplified';
+      document.getElementById('enablePostProcessing').checked = config.postProcessing?.enabled !== false;
       document.getElementById('enablePunctuation').checked = config.whisper?.enablePunctuation !== false;
-      document.getElementById('enableLlmPostprocess').checked = llm.enabled === true;
-      document.getElementById('llmModel').value = llm.model || 'gpt-4o-mini';
-      document.getElementById('llmApiKey').value = llm.apiKey || '';
-      document.getElementById('llmTimeoutMs').value = llm.timeoutMs || 1200;
-      document.getElementById('llmMinChars').value = llm.minChars || 18;
-      document.getElementById('llmMaxChars').value = llm.maxChars || 180;
       document.getElementById('useVocabulary').checked = config.vocabulary?.enabled !== false;
       document.getElementById('appendSpace').checked = config.input?.appendSpace !== false;
       document.getElementById('audioCuesEnabled').checked = config.audioCues?.enabled !== false;
@@ -329,35 +301,30 @@
       return Math.max(min, Math.min(max, n));
     }
 
-    // 保存配置
     async function saveConfig() {
       const currentConfig = await ipcRenderer.invoke('get-config');
-      const llmMinChars = asInt(document.getElementById('llmMinChars').value, 18, 1, 1000);
-      const llmMaxCharsInput = asInt(document.getElementById('llmMaxChars').value, 180, 10, 2000);
-      const llmMaxChars = Math.max(llmMaxCharsInput, llmMinChars);
 
       const newConfig = {
         ...currentConfig,
         shortcut: {
           ...currentConfig.shortcut,
           key: document.getElementById('shortcutKey').value,
-          longPressDuration: parseInt(document.getElementById('longPressDuration').value)
+          longPressDuration: asInt(
+            document.getElementById('longPressDuration').value,
+            500,
+            200,
+            2000
+          )
         },
         whisper: {
-          ...currentConfig.whisper,
           model: document.getElementById('model').value,
           language: document.getElementById('language').value,
           outputScript: document.getElementById('outputScript').value,
           enablePunctuation: document.getElementById('enablePunctuation').checked,
-          llm: {
-            ...(currentConfig.whisper?.llm || {}),
-            enabled: document.getElementById('enableLlmPostprocess').checked,
-            model: document.getElementById('llmModel').value.trim() || 'gpt-4o-mini',
-            apiKey: document.getElementById('llmApiKey').value.trim(),
-            timeoutMs: asInt(document.getElementById('llmTimeoutMs').value, 1200, 300, 5000),
-            minChars: llmMinChars,
-            maxChars: llmMaxChars
-          }
+        },
+        postProcessing: {
+          ...currentConfig.postProcessing,
+          enabled: document.getElementById('enablePostProcessing').checked
         },
         vocabulary: {
           ...currentConfig.vocabulary,
@@ -383,12 +350,10 @@
       }
     }
 
-    // 打开词表文件
     function openVocabFile() {
       ipcRenderer.invoke('open-vocab-editor');
     }
 
-    // 显示状态
     function showStatus(message, type) {
       const status = document.getElementById('status');
       status.textContent = message;
@@ -399,7 +364,6 @@
       }, 3000);
     }
 
-    // 初始化
     loadConfig();
   </script>
 </body>

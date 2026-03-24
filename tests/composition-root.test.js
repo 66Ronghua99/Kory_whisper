@@ -267,6 +267,146 @@ test('composition root requires injected runtime facts instead of falling back t
   );
 });
 
+test('composition root sanitizes renderer config reads and preserves inert whisper state on partial config saves', async () => {
+  const handlers = {};
+  let savedConfig = null;
+  const currentConfig = {
+    shortcut: {
+      key: 'RIGHT COMMAND',
+      longPressDuration: 500
+    },
+    whisper: {
+      model: 'base',
+      language: 'zh',
+      outputScript: 'traditional',
+      enablePunctuation: true,
+      llm: {
+        enabled: true,
+        provider: 'remote',
+        remote: {
+          model: 'legacy-model',
+          apiKey: 'legacy-key'
+        }
+      }
+    },
+    vocabulary: {
+      enabled: true,
+      path: '/tmp/vocabulary.json'
+    },
+    postProcessing: {
+      enabled: false
+    },
+    input: {
+      appendSpace: true
+    },
+    audioCues: {
+      enabled: true
+    }
+  };
+
+  const root = createCompositionRoot({
+    app: { quit() {} },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return currentConfig;
+      },
+      async save(config) {
+        savedConfig = config;
+      },
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: {
+        on() {},
+        async start() {},
+        stop() {}
+      },
+      trayManager: Object.assign(new EventEmitter(), {
+        init() {},
+        dispose() {}
+      }),
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/sample.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          return { microphoneGranted: true, accessibilityEnabled: true };
+        },
+        async ensure() {
+          return { microphoneGranted: true, accessibilityEnabled: true };
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async () => ({
+      whisperEngine: {
+        modelPath: '/models/ggml-base.bin'
+      },
+      async applyConfig() {},
+      async transcribe() {
+        return 'text';
+      },
+      async dispose() {}
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+
+  const rendererConfig = await handlers['get-config']();
+
+  assert.equal(rendererConfig.whisper.model, 'base');
+  assert.equal(rendererConfig.postProcessing.enabled, false);
+  assert.equal('llm' in rendererConfig.whisper, false);
+
+  await handlers['save-config'](null, {
+    whisper: {
+      model: 'small',
+      language: 'en',
+      outputScript: 'original',
+      enablePunctuation: false
+    },
+    postProcessing: {
+      enabled: true
+    }
+  });
+
+  assert.equal(savedConfig.whisper.model, 'small');
+  assert.equal(savedConfig.whisper.outputScript, 'original');
+  assert.equal(savedConfig.postProcessing.enabled, true);
+  assert.deepEqual(savedConfig.whisper.llm, currentConfig.whisper.llm);
+});
+
 test('prepareTranscriptionService returns null when startup model download is declined', async () => {
   const modelDownloader = {
     async checkModel() {

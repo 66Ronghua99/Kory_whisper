@@ -67,13 +67,11 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
   const captureRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-captures-'));
   const audioPath = path.join(tempDir, 'sample.wav');
   const txtPath = path.join(tempDir, 'sample.txt');
-  const vocabPath = path.join(tempDir, 'vocab.json');
   const sourceText = '繁體 JMI';
   const stdoutText = 'stdout summary';
   const stderrText = 'stderr summary';
   await fs.writeFile(txtPath, sourceText, 'utf8');
   await fs.writeFile(audioPath, 'audio-bytes', 'utf8');
-  await fs.writeFile(vocabPath, JSON.stringify({ words: ['Gemini'] }), 'utf8');
   let persistedCapture = null;
 
   const expectedPrompt = '自定义。Gemini。';
@@ -99,7 +97,7 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
         assert.equal(input.meta.stderrSummary, stderrText);
         assert.equal(input.meta.stdoutCharCount, stdoutText.length);
         assert.equal(input.meta.stderrCharCount, stderrText.length);
-        assert.equal(input.meta.finalText, '繁体 Gemini');
+        assert.equal(input.meta.finalText, '繁體 JMI');
         assert.equal(input.meta.errorMessage, null);
         assert.equal(await fs.readFile(txtPath, 'utf8'), sourceText);
         assert.equal(await fs.readFile(audioPath, 'utf8'), 'audio-bytes');
@@ -126,20 +124,19 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
     await withMockedExecFile((bin, args, options, callback) => {
       callback(null, stdoutText, stderrText);
     }, async (WhisperEngine) => {
-      const engine = new WhisperEngine({
-        modelPath: '/tmp/model.bin',
-        whisperBin: '/tmp/whisper-cli',
-        language: 'zh',
-        prompt: '  自定义  ',
-        vocabPath,
-        outputScript: 'simplified',
-        enablePunctuation: false,
-        debugCaptureStore: spy.store
-      });
+        const engine = new WhisperEngine({
+          modelPath: '/tmp/model.bin',
+          whisperBin: '/tmp/whisper-cli',
+          language: 'zh',
+          prompt: '  自定义  ',
+          debugCaptureStore: spy.store
+        });
 
-      const result = await engine.transcribe(audioPath);
-      assert.equal(result, '繁体 Gemini');
-    });
+        const result = await engine.transcribe(audioPath, {
+          vocabularyWords: ['Gemini']
+        });
+        assert.equal(result, '繁體 JMI');
+      });
 
     assert.equal(spy.persistCalls(), 1);
     assert.ok(persistedCapture);
@@ -155,7 +152,7 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
   }
 });
 
-test('simplified output stays in post-processing instead of injecting a style instruction into whisper prompt', async () => {
+test('whisper engine keeps prompt enrichment lexical-only and no longer owns output cleanup transforms', () => {
   const WhisperEngine = require('../src/main/whisper-engine.js');
   const engine = new WhisperEngine({
     language: 'zh',
@@ -165,7 +162,9 @@ test('simplified output stays in post-processing instead of injecting a style in
   });
 
   assert.equal(engine.buildPrompt(['Gemini']), '自定义。Gemini。');
-  assert.equal(await engine.postProcessText('繁體輸出'), '繁体输出');
+  assert.equal('postProcessText' in engine, false);
+  assert.equal('applyVocabularyCorrections' in engine, false);
+  assert.equal('applyChinesePunctuation' in engine, false);
 });
 
 test('transcribe persists failure evidence before cleanup when whisper-cli exits with an error', async () => {

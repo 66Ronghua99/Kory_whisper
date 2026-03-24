@@ -10,6 +10,7 @@ const { createConfigDefaults } = require('../src/main/config/config-defaults.js'
 const {
   resolveConfigProfileDefaults
 } = require('../src/main/config/config-profile-defaults.js');
+const { createPostProcessingContext } = require('../src/main/post-processing/context.js');
 
 test('top-level config manager stays as a compatibility shim for the canonical config home', () => {
   assert.equal(ConfigManager, CanonicalConfigManager);
@@ -145,6 +146,76 @@ test('config manager merges nested overrides without dropping defaults', () => {
   assert.equal(merged.whisper.llm.remote.model, 'gpt-4o-mini');
   assert.equal(merged.input.appendSpace, false);
   assert.equal(merged.audioCues.recordingStartSound, 'Tink');
+  assert.equal(merged.postProcessing.enabled, true);
+  assert.equal(merged.postProcessing.pipeline, 'default');
+  assert.equal(merged.postProcessing.stages.basicItn, true);
+  assert.equal(merged.postProcessing.stages.disfluencyCleanup, true);
+  assert.equal(merged.postProcessing.stages.scriptNormalization, true);
+  assert.equal(
+    merged.postProcessing.stages.vocabularyReplacement,
+    merged.vocabulary.enabled
+  );
+  assert.equal(
+    merged.postProcessing.stages.punctuation,
+    merged.whisper.enablePunctuation
+  );
+});
+
+test('config normalization lets owner toggles disable vocabulary replacement and punctuation stages', () => {
+  const configManager = new ConfigManager();
+  const merged = configManager.mergeWithDefaults({
+    vocabulary: {
+      enabled: false
+    },
+    whisper: {
+      enablePunctuation: false
+    },
+    postProcessing: {
+      enabled: true,
+      stages: {
+        vocabularyReplacement: true,
+        punctuation: true
+      }
+    }
+  });
+
+  const context = createPostProcessingContext({
+    config: merged
+  });
+
+  assert.equal(context.config.vocabulary.enabled, false);
+  assert.equal(context.config.whisper.enablePunctuation, false);
+  assert.equal(context.config.postProcessing.stages.vocabularyReplacement, false);
+  assert.equal(context.config.postProcessing.stages.punctuation, false);
+});
+
+test('postProcessing enabled false acts as the top-level kill switch for every stage toggle', () => {
+  const configManager = new ConfigManager();
+  const merged = configManager.mergeWithDefaults({
+    postProcessing: {
+      enabled: false,
+      stages: {
+        scriptNormalization: true,
+        vocabularyReplacement: true,
+        basicItn: true,
+        disfluencyCleanup: true,
+        punctuation: true
+      }
+    }
+  });
+
+  const context = createPostProcessingContext({
+    config: merged
+  });
+
+  assert.equal(context.config.postProcessing.enabled, false);
+  assert.deepEqual(context.config.postProcessing.stages, {
+    scriptNormalization: false,
+    vocabularyReplacement: false,
+    basicItn: false,
+    disfluencyCleanup: false,
+    punctuation: false
+  });
 });
 
 test('config manager deepMerge prefers override arrays and nullish handling is explicit', () => {
@@ -234,6 +305,54 @@ test('first-run load persists profile defaults for darwin and win32 configs', as
     assert.equal(darwinSaved.input.method, 'applescript');
     assert.equal(win32Saved.shortcut.key, 'RIGHT CONTROL');
     assert.equal(win32Saved.input.method, 'clipboard');
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('legacy whisper llm config stays inert while postProcessing enabled and outputScript round-trip independently', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-config-'));
+  const configManager = new CanonicalConfigManager({
+    configDir: tempDir,
+    vocabPath: path.join(tempDir, 'vocabulary.json')
+  });
+
+  const legacyLlm = {
+    enabled: true,
+    provider: 'remote',
+    remote: {
+      endpoint: 'https://example.test/v1/chat/completions',
+      model: 'legacy-model',
+      timeoutMs: 2200,
+      minChars: 12,
+      maxChars: 144,
+      apiKey: 'legacy-key'
+    }
+  };
+
+  try {
+    await configManager.save({
+      whisper: {
+        outputScript: 'traditional',
+        llm: legacyLlm
+      },
+      postProcessing: {
+        enabled: false
+      }
+    });
+
+    await configManager.load();
+
+    assert.equal(configManager.get().postProcessing.enabled, false);
+    assert.equal(configManager.get().whisper.outputScript, 'traditional');
+    assert.deepEqual(configManager.get().whisper.llm, {
+      ...configManager.getDefaultConfig().whisper.llm,
+      ...legacyLlm,
+      remote: {
+        ...configManager.getDefaultConfig().whisper.llm.remote,
+        ...legacyLlm.remote
+      }
+    });
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }

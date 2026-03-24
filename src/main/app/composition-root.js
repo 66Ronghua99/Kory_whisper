@@ -48,6 +48,38 @@ function requireRuntimeEnv(runtimeEnv) {
   return runtimeEnv;
 }
 
+function mergeConfigPatch(currentConfig = {}, patch = {}) {
+  if (patch === undefined || patch === null) {
+    return currentConfig;
+  }
+
+  if (Array.isArray(patch) || typeof patch !== 'object') {
+    return patch;
+  }
+
+  if (!currentConfig || typeof currentConfig !== 'object' || Array.isArray(currentConfig)) {
+    return { ...patch };
+  }
+
+  const merged = { ...currentConfig };
+
+  for (const key of Object.keys(patch)) {
+    merged[key] = mergeConfigPatch(currentConfig[key], patch[key]);
+  }
+
+  return merged;
+}
+
+function sanitizeConfigForRenderer(config = {}) {
+  const sanitized = mergeConfigPatch({}, config);
+
+  if (sanitized.whisper && Object.prototype.hasOwnProperty.call(sanitized.whisper, 'llm')) {
+    delete sanitized.whisper.llm;
+  }
+
+  return sanitized;
+}
+
 class CompositionRoot {
   constructor(options = {}) {
     const electron = getElectronSurface(options);
@@ -130,7 +162,11 @@ class CompositionRoot {
       dialog: this.dialog,
       BrowserWindow: this.BrowserWindow,
       logger: this.logger,
+      loadVocabularyData: this.collaborators.loadVocabularyData,
       modelDownloader: this.modelDownloader,
+      postProcessingPipeline: this.collaborators.postProcessingPipeline,
+      createPostProcessingContext: this.collaborators.createPostProcessingContext,
+      applyPostProcessing: this.collaborators.applyPostProcessing,
       runtimeEnv: this.runtimeEnv,
       runtimePaths: this.runtimePaths,
       whisperEngine: this.collaborators.whisperEngine
@@ -203,10 +239,20 @@ class CompositionRoot {
       return;
     }
 
-    this.ipcMain.handle('get-config', () => this.configManager.get());
-    this.ipcMain.handle('save-config', async (event, config) => {
-      await this.applyRuntimeConfig(config);
-      await this.configManager.save(config);
+    this.ipcMain.handle('get-config', () => {
+      if (typeof this.configManager.sanitizeForRenderer === 'function') {
+        return this.configManager.sanitizeForRenderer(this.configManager.get());
+      }
+
+      return sanitizeConfigForRenderer(this.configManager.get());
+    });
+    this.ipcMain.handle('save-config', async (event, configPatch) => {
+      const nextConfig = typeof this.configManager.mergeRendererPatch === 'function'
+        ? this.configManager.mergeRendererPatch(this.configManager.get(), configPatch)
+        : mergeConfigPatch(this.configManager.get(), configPatch);
+
+      await this.applyRuntimeConfig(nextConfig);
+      await this.configManager.save(nextConfig);
     });
     this.ipcMain.handle('open-vocab-editor', () => this.openVocabEditor());
     this.ipcMain.handle('get-logs', async () => {
@@ -277,5 +323,7 @@ function createCompositionRoot(options = {}) {
 
 module.exports = {
   CompositionRoot,
-  createCompositionRoot
+  createCompositionRoot,
+  mergeConfigPatch,
+  sanitizeConfigForRenderer
 };

@@ -58,6 +58,17 @@ function createConfigDefaults(options = {}) {
       enabled: true,
       path: vocabPath
     },
+    postProcessing: {
+      enabled: true,
+      pipeline: 'default',
+      stages: {
+        basicItn: true,
+        disfluencyCleanup: true,
+        scriptNormalization: true,
+        vocabularyReplacement: true,
+        punctuation: true
+      }
+    },
     input: {
       appendSpace: true,
       autoPunctuation: false

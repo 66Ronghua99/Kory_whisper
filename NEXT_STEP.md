@@ -1,1 +1,1 @@
-Write the first Windows implementation loop plan for `src/main/platform/profiles/win32-profile.js` and `src/main/platform/adapters/win32/*`, then execute that plan with tests and evidence.
+Run the macOS interactive smoke matrix for tray, permissions, settings, and merged ASR post-processing behavior, then record fresh evidence under `artifacts/worktree-merge-backfill/`.

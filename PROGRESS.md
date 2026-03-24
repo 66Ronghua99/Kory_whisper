@@ -17,6 +17,9 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - Guarded coverage now stays on the stable seam subset instead of pretending to cover the whole main process.
 - Architecture/testing docs and tracked markdown evidence now match the new composition/runtime/profile boundaries.
 - Whisper transcription still fails fast on child-process errors, preserves debug captures, and avoids the simplified-Chinese prompt-echo regression.
+- The remaining `codex/lightweight-postprocessor` worktree behavior now lives on `master` through `src/main/post-processing/`, `src/main/services/transcription-service.js`, and the renderer/config merge path.
+- Renderer config now exposes `postProcessing.enabled`, keeps legacy `whisper.llm` state inert, and preserves hidden config on partial saves.
+- The `codex/model-cache` worktree has been reconciled against current `master`; the shared Whisper model store behavior was already absorbed by the runtime/shared-path layer.
 
 ## In Progress
 
@@ -26,6 +29,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 
 - Implement the first Windows-native behavior loop on top of the `win32` profile and adapter paths.
 - Run the macOS interactive smoke matrix on a mac host to refresh tray/permission/path evidence.
+- Run a manual dictation/settings smoke pass for the merged ASR post-processing path on a mac host and capture fresh evidence.
 
 ## Product Snapshot
 
@@ -34,5 +38,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - `src/main/runtime/` owns runtime facts, path derivation, and capability facts.
 - `src/main/services/` owns dictation workflow orchestration and should remain platform-agnostic.
 - `src/main/platform/` owns platform selection, profiles, and OS-specific adapters.
+- `src/main/post-processing/` now owns ASR cleanup stages, while `src/main/services/transcription-service.js` owns vocabulary loading and pipeline invocation.
 - Guarded coverage remains intentionally narrow and honest.
 - Fresh decoupling evidence lives in tracked markdown artifacts under `artifacts/windows-runtime-decoupling/`.
+- Fresh merge-back evidence for the worktree reconciliation lives under `artifacts/worktree-merge-backfill/`.

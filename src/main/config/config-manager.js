@@ -5,6 +5,7 @@ const { createRuntimeEnv } = require('../runtime/runtime-env');
 const { getSharedAppDir, joinPathSegments } = require('../shared/model-paths');
 const { createConfigDefaults } = require('./config-defaults');
 const { resolveConfigProfileDefaults } = require('./config-profile-defaults');
+const { normalizeConfig } = require('../post-processing/context');
 
 function resolveRuntimeEnv(options = {}) {
   const runtimeEnv = options.runtimeEnv || {};
@@ -117,7 +118,31 @@ class ConfigManager {
   }
 
   mergeWithDefaults(config = {}) {
-    return this.deepMerge(this.getDefaultConfig(), config);
+    const merged = this.deepMerge(this.getDefaultConfig(), config);
+    const normalizedPostProcessing = normalizeConfig(merged, {
+      effectiveStageToggles: false
+    });
+
+    return {
+      ...merged,
+      whisper: normalizedPostProcessing.whisper,
+      vocabulary: normalizedPostProcessing.vocabulary,
+      postProcessing: normalizedPostProcessing.postProcessing
+    };
+  }
+
+  mergeRendererPatch(currentConfig = {}, patch = {}) {
+    return this.mergeConfigPatch(currentConfig, patch);
+  }
+
+  sanitizeForRenderer(config = {}) {
+    const sanitized = this.mergeConfigPatch({}, config);
+
+    if (sanitized.whisper && Object.prototype.hasOwnProperty.call(sanitized.whisper, 'llm')) {
+      delete sanitized.whisper.llm;
+    }
+
+    return sanitized;
   }
 
   deepMerge(base, override) {
@@ -137,6 +162,28 @@ class ConfigManager {
     for (const key of Object.keys(override)) {
       merged[key] = this.deepMerge(base[key], override[key]);
     }
+    return merged;
+  }
+
+  mergeConfigPatch(currentConfig = {}, patch = {}) {
+    if (patch === undefined || patch === null) {
+      return currentConfig;
+    }
+
+    if (Array.isArray(patch) || typeof patch !== 'object') {
+      return patch;
+    }
+
+    if (!currentConfig || typeof currentConfig !== 'object' || Array.isArray(currentConfig)) {
+      return { ...patch };
+    }
+
+    const merged = { ...currentConfig };
+
+    for (const key of Object.keys(patch)) {
+      merged[key] = this.mergeConfigPatch(currentConfig[key], patch[key]);
+    }
+
     return merged;
   }
 }
