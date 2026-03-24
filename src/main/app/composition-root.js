@@ -1,5 +1,8 @@
 const RecordingService = require('../services/recording-service');
-const TranscriptionService = require('../services/transcription-service');
+const {
+  prepareTranscriptionService,
+  resolveModelKey
+} = require('../services/transcription-service');
 const InjectionService = require('../services/injection-service');
 const CueService = require('../services/cue-service');
 const TrayService = require('../services/tray-service');
@@ -37,27 +40,12 @@ function getLoggerModule(overrides = {}) {
   return require('../logger');
 }
 
-function resolveModelKey(model) {
-  const validModels = ['base', 'small', 'medium'];
-  return validModels.includes(model) ? model : 'base';
-}
+function requireRuntimeEnv(runtimeEnv) {
+  if (!runtimeEnv || !runtimeEnv.platform) {
+    throw new Error('Missing required runtimeEnv.platform');
+  }
 
-function getModelFilename(modelKey) {
-  const mapping = {
-    base: 'ggml-base.bin',
-    small: 'ggml-small.bin',
-    medium: 'ggml-medium.bin'
-  };
-  return mapping[resolveModelKey(modelKey)];
-}
-
-function getModelMinBytes(modelName) {
-  const minBytes = {
-    'ggml-base.bin': 100 * 1024 * 1024,
-    'ggml-small.bin': 300 * 1024 * 1024,
-    'ggml-medium.bin': 700 * 1024 * 1024
-  };
-  return minBytes[modelName] || 50 * 1024 * 1024;
+  return runtimeEnv;
 }
 
 class CompositionRoot {
@@ -71,14 +59,15 @@ class CompositionRoot {
     this.systemPreferences = options.systemPreferences || electron.systemPreferences || null;
     this.logger = options.logger || getLoggerModule(options);
     this.loggerModule = getLoggerModule(options);
-    this.runtimeEnv = options.runtimeEnv || { platform: process.platform };
+    this.runtimeEnv = requireRuntimeEnv(options.runtimeEnv);
     this.runtimePaths = options.runtimePaths || null;
     this.platformApi = getPlatformApi(this.runtimeEnv, options);
     this.shortcutStartDelayMs = options.shortcutStartDelayMs || 0;
     this.wait = options.wait || ((delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs)));
     this.collaborators = options.collaborators || {};
+    this.prepareTranscriptionService = options.prepareTranscriptionService || prepareTranscriptionService;
     this.configManager = options.configManager || this.createConfigManager(options);
-    this.modelDownloader = options.modelDownloader || this.createModelDownloader();
+    this.modelDownloader = options.modelDownloader || null;
     this.services = {};
   }
 
@@ -92,29 +81,17 @@ class CompositionRoot {
     });
   }
 
-  createModelDownloader() {
-    const ModelDownloader = require('../model-downloader');
-    return new ModelDownloader({
-      modelsDir: this.runtimePaths ? this.runtimePaths.sharedModelsDir : undefined
-    });
-  }
-
   async initialize() {
     if (typeof this.configManager.load === 'function') {
       await this.configManager.load();
     }
 
     const config = this.configManager.get();
-    const modelName = getModelFilename(config.whisper?.model);
-
-    if (!this.collaborators.whisperEngine) {
-      const modelReady = await this.checkAndDownloadModel(modelName);
-      if (!modelReady) {
-        return false;
-      }
+    await this.buildServices(config);
+    if (!this.services.transcription) {
+      return false;
     }
 
-    this.buildServices(config, modelName);
     this.registerAppEvents();
 
     this.services.tray.init();
@@ -134,7 +111,7 @@ class CompositionRoot {
     return true;
   }
 
-  buildServices(config, modelName) {
+  async buildServices(config) {
     const shortcutManager = this.collaborators.shortcutManager || this.createShortcutManager(config);
     const trayManager = this.collaborators.trayManager || this.createTrayManager();
     const audioRecorder = this.collaborators.audioRecorder || this.platformApi.getAudioRecorder({
@@ -148,11 +125,20 @@ class CompositionRoot {
     const inputSimulator = this.collaborators.inputSimulator || this.platformApi.getInputSimulator({
       appendSpace: config.input?.appendSpace !== false
     });
-    const whisperEngine = this.collaborators.whisperEngine || this.createWhisperEngine(config, modelName);
+    const transcriptionService = this.collaborators.transcriptionService || await this.prepareTranscriptionService({
+      config,
+      dialog: this.dialog,
+      BrowserWindow: this.BrowserWindow,
+      logger: this.logger,
+      modelDownloader: this.modelDownloader,
+      runtimeEnv: this.runtimeEnv,
+      runtimePaths: this.runtimePaths,
+      whisperEngine: this.collaborators.whisperEngine
+    });
 
     this.services = {
       recording: new RecordingService({ audioRecorder }),
-      transcription: new TranscriptionService({ whisperEngine }),
+      transcription: transcriptionService,
       injection: new InjectionService({ inputSimulator }),
       cue: new CueService({ audioCuePlayer }),
       tray: new TrayService({ trayManager }),
@@ -187,26 +173,6 @@ class CompositionRoot {
   createTrayManager() {
     const TrayManager = require('../tray-manager');
     return new TrayManager();
-  }
-
-  createWhisperEngine(config, modelName) {
-    const WhisperEngine = require('../whisper-engine');
-    const DebugCaptureStore = require('../debug-capture-store');
-    const debugCaptureStore = new DebugCaptureStore(this.runtimePaths.sharedDebugCapturesDir, {
-      onError: (message, error) => this.logger.error('[DebugCaptureStore]', message, error)
-    });
-
-    return new WhisperEngine({
-      modelPath: this.runtimePaths.getSharedModelPath(modelName),
-      vocabPath: config.vocabulary?.path,
-      language: config.whisper?.language || 'zh',
-      prompt: config.whisper?.prompt || '',
-      outputScript: config.whisper?.outputScript || 'simplified',
-      enablePunctuation: config.whisper?.enablePunctuation !== false,
-      llm: config.whisper?.llm || {},
-      whisperBin: this.runtimePaths.whisperBinPath,
-      debugCaptureStore
-    });
   }
 
   registerAppEvents() {
@@ -257,33 +223,17 @@ class CompositionRoot {
   }
 
   async applyRuntimeConfig(config) {
-    const modelName = getModelFilename(config.whisper?.model);
-    const modelPath = this.runtimePaths.getSharedModelPath(modelName);
-
     if (config.whisper) {
       config.whisper.model = resolveModelKey(config.whisper.model);
     }
 
-    if (this.services.transcription) {
-      let nextModelPath = this.services.transcription.whisperEngine?.modelPath || modelPath;
-      if (nextModelPath !== modelPath && !this.collaborators.whisperEngine) {
-        const modelReady = await this.checkAndDownloadModel(modelName);
-        if (!modelReady) {
-          throw new Error('模型下载被取消，未切换模型');
+    if (this.services.transcription && typeof this.services.transcription.applyConfig === 'function') {
+      await this.services.transcription.applyConfig({
+        ...config,
+        vocabulary: {
+          ...config.vocabulary,
+          path: config.vocabulary?.path || this.configManager.getVocabPath()
         }
-        nextModelPath = modelPath;
-      } else {
-        nextModelPath = modelPath;
-      }
-
-      this.services.transcription.updateRuntimeOptions({
-        modelPath: nextModelPath,
-        vocabPath: config.vocabulary?.path || this.configManager.getVocabPath(),
-        language: config.whisper?.language || 'zh',
-        prompt: config.whisper?.prompt || '',
-        outputScript: config.whisper?.outputScript || 'simplified',
-        enablePunctuation: config.whisper?.enablePunctuation !== false,
-        llm: config.whisper?.llm || {}
       });
     }
 
@@ -304,99 +254,6 @@ class CompositionRoot {
     }
 
     this.shell.openPath(this.configManager.getVocabPath());
-  }
-
-  async checkAndDownloadModel(modelName = 'ggml-base.bin') {
-    const modelCheck = await this.modelDownloader.checkModel(modelName);
-    const minSize = getModelMinBytes(modelName);
-    const modelInfo = this.modelDownloader.getModelInfo(modelName);
-
-    if (modelCheck.exists && modelCheck.size > minSize) {
-      return true;
-    }
-
-    const bundledModelPath = this.runtimePaths.getBundledModelPath(modelName);
-    const seededModel = await this.modelDownloader.seedModelFromPath(bundledModelPath, modelName);
-    if (seededModel.copied && seededModel.size > minSize) {
-      return true;
-    }
-
-    if (!this.dialog || typeof this.dialog.showMessageBox !== 'function') {
-      throw new Error(`Model missing and no dialog available for download prompt: ${modelName}`);
-    }
-
-    const result = await this.dialog.showMessageBox({
-      type: 'info',
-      buttons: ['下载模型', '退出'],
-      defaultId: 0,
-      title: '需要下载语音模型',
-      message: '首次使用需要下载 Whisper 语音模型。',
-      detail: `模型: ${modelName}\n模型大小: 约 ${modelInfo.size}\n说明: ${modelInfo.desc}`
-    });
-
-    if (result.response !== 0) {
-      return false;
-    }
-
-    const progressWindow = this.createDownloadProgressWindow(modelName, modelInfo.size);
-
-    try {
-      await this.modelDownloader.downloadModel(modelName, (progress) => {
-        if (progressWindow && progressWindow.webContents) {
-          progressWindow.webContents.send('progress', progress);
-        }
-      });
-
-      if (progressWindow) {
-        progressWindow.close();
-      }
-      return true;
-    } catch (error) {
-      if (progressWindow) {
-        progressWindow.close();
-      }
-      if (typeof this.dialog.showErrorBox === 'function') {
-        this.dialog.showErrorBox('下载失败', `模型下载失败，请检查网络连接。\n${error.message}`);
-      }
-      return false;
-    }
-  }
-
-  createDownloadProgressWindow(modelName, modelSize) {
-    if (!this.BrowserWindow) {
-      return null;
-    }
-
-    const progressWindow = new this.BrowserWindow({
-      width: 400,
-      height: 150,
-      title: '下载模型中...',
-      resizable: false,
-      minimizable: false,
-      webPreferences: {
-        nodeIntegration: true,
-        contextIsolation: false
-      }
-    });
-
-    progressWindow.loadURL(`data:text/html,
-      <html>
-      <head><meta charset="UTF-8"></head>
-      <body style="font-family: sans-serif; text-align: center; padding: 30px;">
-        <h3>正在下载语音模型...</h3>
-        <p id="progress">0%</p>
-        <p style="font-size: 12px; color: #666;">模型: ${modelName} (${modelSize})</p>
-      </body>
-      <script>
-        const { ipcRenderer } = require('electron');
-        ipcRenderer.on('progress', (event, progress) => {
-          document.getElementById('progress').textContent = progress + '%';
-        });
-      </script>
-      </html>
-    `);
-
-    return progressWindow;
   }
 
   async dispose() {

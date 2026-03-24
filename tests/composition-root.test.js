@@ -21,6 +21,7 @@ test('composition root wires injected services and drives dictation through shor
   const events = [];
   const handlers = {};
   let savedConfig = null;
+  let savedTranscriptionConfig = null;
 
   const shortcutManager = createShortcutManagerSpy(events);
   const trayManager = new EventEmitter();
@@ -92,24 +93,20 @@ test('composition root wires injected services and drives dictation through shor
     }
   };
 
-  const whisperEngine = {
-    modelPath: '/models/ggml-base.bin',
-    vocabPath: '/tmp/vocabulary.json',
-    language: 'zh',
-    prompt: '',
-    outputScript: 'simplified',
-    enablePunctuation: true,
-    localLLM: {
-      stopServer() {
-        events.push('whisper:stop-server');
-      }
+  const transcriptionService = {
+    whisperEngine: {
+      modelPath: '/models/ggml-base.bin'
     },
     async transcribe(audioPath) {
       events.push(`transcribe:${audioPath}`);
       return 'hello world';
     },
-    updateRuntimeOptions(options) {
-      events.push(`transcribe:update:${options.modelPath}`);
+    async applyConfig(config) {
+      savedTranscriptionConfig = config;
+      events.push(`transcribe:apply:${config.whisper.model}`);
+    },
+    async dispose() {
+      events.push('whisper:stop-server');
     }
   };
 
@@ -161,8 +158,11 @@ test('composition root wires injected services and drives dictation through shor
       audioRecorder,
       permissionGateway,
       audioCuePlayer,
-      inputSimulator,
-      whisperEngine
+      inputSimulator
+    },
+    prepareTranscriptionService: async ({ config, runtimeEnv, runtimePaths }) => {
+      events.push(`transcribe:prepare:${config.whisper.model}:${runtimeEnv.platform}:${typeof runtimePaths.getSharedModelPath}`);
+      return transcriptionService;
     },
     logger: {
       info() {},
@@ -201,6 +201,7 @@ test('composition root wires injected services and drives dictation through shor
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.deepEqual(events, [
+    'transcribe:prepare:base:darwin:function',
     'tray:init',
     'permissions:ensure',
     'shortcut:start',
@@ -240,7 +241,8 @@ test('composition root wires injected services and drives dictation through shor
 
   assert.equal(savedConfig.whisper.model, 'small');
   assert.equal(events.includes('cue:update:false'), true);
-  assert.equal(events.includes('transcribe:update:/models/ggml-small.bin'), true);
+  assert.equal(events.includes('transcribe:apply:small'), true);
+  assert.equal(savedTranscriptionConfig.whisper.model, 'small');
 
   trayManager.emit('show-settings');
   trayManager.emit('quit');
@@ -250,6 +252,15 @@ test('composition root wires injected services and drives dictation through shor
   assert.equal(events.includes('app:quit'), true);
   assert.equal(events.includes('shortcut:stop'), true);
   assert.equal(events.includes('whisper:stop-server'), true);
+});
+
+test('composition root requires injected runtime facts instead of falling back to process.platform', () => {
+  assert.throws(
+    () => createCompositionRoot({
+      runtimePaths: {}
+    }),
+    /runtimeEnv\.platform/
+  );
 });
 
 test('bootstrap app keeps startup sequencing outside the Electron entrypoint', async () => {
