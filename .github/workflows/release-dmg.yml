@@ -55,10 +55,12 @@ jobs:
       - name: Publish DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          token: ${{ github.token }}
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: ${{ steps.release_tag.outputs.tag }}
           files: dist/*.dmg
           generate_release_notes: true
           fail_on_unmatched_files: true
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
