@@ -35,6 +35,8 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - The repo hardgate now blocks renderer/service ownership of platform-specific shortcut/audio option tables without any remaining `settings.html` exception.
 - Fresh verification for the Windows platform UI contract loop now includes `npm run lint`, `npm test`, and `npm run test:coverage`, and the new guarded config/hardgate files for this loop hold `100%` line and branch coverage.
 - The full repository test suite is green again after aligning the composition-root progress expectation with the current object-shaped model download progress payload.
+- Electron Builder now sources app icons from tracked `build/icon.png`, with mac entitlements checked in under `build/entitlements.mac.plist` instead of relying on local-only build resources.
+- A dedicated GitHub Actions Windows release workflow now exists at `.github/workflows/release-windows.yml`, builds an NSIS installer through `npm run build:win:release`, and targets `dist/*.exe` release uploads.
 
 ## In Progress
 
@@ -60,8 +62,10 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - `src/main/post-processing/` now owns ASR cleanup stages, while `src/main/services/transcription-service.js` owns vocabulary loading and pipeline invocation.
 - `src/main/cli/windows-smoke.js` owns the dedicated Windows smoke command and long-press proof loop.
 - `electron-builder.config.js` now keeps a Windows unpacked build path viable by disabling executable edit/sign work for the local `dir` build flow.
+- `electron-builder.config.js` now also points macOS and Windows app-icon slots at the tracked `build/icon.png` resource, while the runtime tray icon remains under `assets/iconTemplate.png`.
 - `src/main/platform/profiles/*.js` now own renderer/tray-facing shortcut and audio-cue UI contract data, and `src/renderer/settings.html` renders only from injected contract payloads.
 - `src/main/platform/adapters/win32/audio-cue-player.js` and `src/main/platform/audio-cues-win32.js` now map Windows cue playback to native `SystemSounds` instead of a no-op placeholder.
+- `.github/workflows/release-windows.yml` now owns the Windows release path and publishes the NSIS installer artifact built by `npm run build:win:release`.
 - Guarded coverage remains intentionally narrow and honest.
 - Fresh decoupling evidence lives in tracked markdown artifacts under `artifacts/windows-runtime-decoupling/`.
 - Fresh merge-back evidence for the worktree reconciliation lives under `artifacts/worktree-merge-backfill/`.

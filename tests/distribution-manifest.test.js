@@ -113,6 +113,10 @@ test('electron-builder config sources platform resource slots from the distribut
     'electron-builder --config electron-builder.config.js --win --dir'
   );
   assert.equal(
+    packageJson.scripts['build:win:release'],
+    'electron-builder --config electron-builder.config.js --win nsis --publish never'
+  );
+  assert.equal(
     electronBuilderConfig.mac.entitlements,
     'build/entitlements.mac.plist'
   );
@@ -129,8 +133,27 @@ test('electron-builder config sources platform resource slots from the distribut
     listElectronBuilderExtraResources('win32')
   );
   assert.equal(
+    electronBuilderConfig.mac.icon,
+    'build/icon.png'
+  );
+  assert.equal(
+    electronBuilderConfig.win.icon,
+    'build/icon.png'
+  );
+  assert.equal(
     electronBuilderConfig.win.signAndEditExecutable,
     false
+  );
+});
+
+test('electron-builder build resources exist for app icons and mac entitlements', () => {
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '..', 'build', 'icon.png')),
+    true
+  );
+  assert.equal(
+    fs.existsSync(path.join(__dirname, '..', 'build', 'entitlements.mac.plist')),
+    true
   );
 });
 
