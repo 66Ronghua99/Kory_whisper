@@ -47,7 +47,7 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Build DMG
-        run: npm run build -- --mac
+        run: npm run build -- --mac --publish never
 
       - name: Verify DMG output
         run: ls -lh dist/*.dmg
@@ -55,12 +55,12 @@ jobs:
       - name: Publish DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ github.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: ${{ steps.release_tag.outputs.tag }}
           files: dist/*.dmg
           generate_release_notes: true
           fail_on_unmatched_files: true
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
