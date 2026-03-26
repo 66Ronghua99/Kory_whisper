@@ -21,6 +21,7 @@
 - macOS dictation still depends on Accessibility, Microphone, and Input Monitoring style recovery flows; settings navigation must stay accurate.
 - Whisper models should stay in the shared store `~/.kory-whisper/models/` instead of per-worktree repo paths.
 - Avoid natural-language style instructions in `whisper-cli --prompt`; keep script normalization in post-processing to avoid prompt-echo regressions.
+- Keep vocabulary `words` in post-processing only; injecting them into `whisper-cli --prompt` can collapse long speech into prompt-echo outputs like `Keywords Keywords`.
 - Long-running Whisper failures should fail fast and preserve debug captures instead of returning partial `.txt` output as success.
 - `postProcessing.enabled` is the renderer-visible kill switch; stage-specific preferences can stay persisted even when the top-level switch is off.
 - The current permission UX target is: app may launch, but dictation stays `not ready` until Microphone, Accessibility, and Input Monitoring are all resolved; first run should auto-open dedicated onboarding, and the menu bar/settings surfaces must keep recovery visible afterward.

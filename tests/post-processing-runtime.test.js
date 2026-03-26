@@ -98,7 +98,7 @@ test('applyPostProcessing returns last-known-good text and logs stage errors', a
   assert.match(warnings[0], /boom/);
 });
 
-test('transcription service loads vocabulary once and runs the post-processing pipeline after whisper returns raw text', async () => {
+test('transcription service loads vocabulary once and keeps vocabulary usage in post-processing only', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kory-whisper-postprocess-'));
   const vocabPath = path.join(tempDir, 'vocabulary.json');
   const loadCalls = [];
@@ -166,9 +166,7 @@ test('transcription service loads vocabulary once and runs the post-processing p
     assert.equal(result, 'final text');
     assert.equal(loadCalls.length, 1);
     assert.equal(loadCalls[0], vocabPath);
-    assert.deepEqual(whisperEngine.transcribeOptions, {
-      vocabularyWords: ['Gemini']
-    });
+    assert.equal(whisperEngine.transcribeOptions, undefined);
     assert.equal(contextInputs.length, 1);
     assert.deepEqual(contextInputs[0].vocabulary, {
       words: ['Gemini'],

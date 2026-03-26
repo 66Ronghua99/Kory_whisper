@@ -23,10 +23,7 @@ class WhisperEngine {
     console.log('[Whisper] Starting transcription...');
     console.log('[Whisper] Audio file:', audioPath);
 
-    const vocabularyWords = Array.isArray(options.vocabularyWords)
-      ? options.vocabularyWords
-      : [];
-    const prompt = this.buildPrompt(vocabularyWords);
+    const prompt = this.buildPrompt();
     const outputPath = audioPath.replace('.wav', '');
 
     const args = [
@@ -146,22 +143,12 @@ class WhisperEngine {
     }
   }
 
-  buildPrompt(vocabulary) {
-    const promptParts = [];
-
-    if (this.prompt && this.prompt.trim()) {
-      promptParts.push(this.prompt.trim());
-    }
-
-    if (vocabulary && vocabulary.length > 0) {
-      promptParts.push(vocabulary.join('，'));
-    }
-
-    if (promptParts.length === 0) {
+  buildPrompt() {
+    if (!this.prompt || !this.prompt.trim()) {
       return '';
     }
 
-    return `${promptParts.join('。')}。`;
+    return `${this.prompt.trim()}。`;
   }
 
   async cleanup(outputPath) {

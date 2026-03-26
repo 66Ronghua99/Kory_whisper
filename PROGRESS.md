@@ -24,6 +24,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - The composition root and focused tests now import `src/main/config/config-manager.js` and `src/main/shared/model-paths.js` directly.
 - Guarded coverage and current-state docs no longer treat the deleted shim files as part of the canonical seam slice.
 - The macOS permission onboarding loop is now recorded as complete in the repo truth files, with fresh evidence scaffolding under `artifacts/macos-permission-onboarding/`.
+- Whisper prompt construction no longer injects vocabulary words; vocabulary remains a post-processing concern to avoid prompt-echo regressions such as `Keywords Keywords`.
 
 ## In Progress
 

@@ -42,9 +42,7 @@ class TranscriptionService {
 
   async transcribe(audioPath) {
     const vocabularyData = await this.loadCurrentVocabularyData();
-    const rawText = await this.whisperEngine.transcribe(audioPath, {
-      vocabularyWords: vocabularyData.words
-    });
+    const rawText = await this.whisperEngine.transcribe(audioPath);
 
     const postProcessingContext = this.createPostProcessingContext({
       config: this.config,

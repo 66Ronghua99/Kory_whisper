@@ -74,7 +74,7 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
   await fs.writeFile(audioPath, 'audio-bytes', 'utf8');
   let persistedCapture = null;
 
-  const expectedPrompt = '自定义。Gemini。';
+  const expectedPrompt = '自定义。';
   const expectedArgs = [
     '-m', '/tmp/model.bin',
     '-f', audioPath,
@@ -152,7 +152,7 @@ test('transcribe persists the effective prompt, args, stdout and raw text before
   }
 });
 
-test('whisper engine keeps prompt enrichment lexical-only and no longer owns output cleanup transforms', () => {
+test('whisper engine keeps explicit prompt only and no longer owns output cleanup transforms', () => {
   const WhisperEngine = require('../src/main/whisper-engine.js');
   const engine = new WhisperEngine({
     language: 'zh',
@@ -161,7 +161,7 @@ test('whisper engine keeps prompt enrichment lexical-only and no longer owns out
     enablePunctuation: false
   });
 
-  assert.equal(engine.buildPrompt(['Gemini']), '自定义。Gemini。');
+  assert.equal(engine.buildPrompt(['Gemini']), '自定义。');
   assert.equal('postProcessText' in engine, false);
   assert.equal('applyVocabularyCorrections' in engine, false);
   assert.equal('applyChinesePunctuation' in engine, false);
