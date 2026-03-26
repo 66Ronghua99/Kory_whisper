@@ -13,11 +13,21 @@
 - The shared Whisper model store is already canonical on `master`; future worktree reconciliation should compare against `src/main/shared/model-paths.js` before trying to re-merge old model-cache branches.
 - Do not recreate deleted top-level shims such as `src/main/config-manager.js` or `src/main/model-paths.js`; import the canonical config/shared modules directly.
 - The removed Mac-only legacy bucket and unused local/remote LLM post-process experiments are now outside the repo contract; keep them gone unless a new approved spec explicitly reintroduces them.
+- The dedicated Windows smoke command now lives in `src/main/cli/windows-smoke.js` and should stay explicit about RIGHT CONTROL, clipboard delivery, and the repository-managed whisper binary.
+- The Windows Whisper bundle now requires `bin/whisper-cli.exe`, `bin/whisper.dll`, `bin/ggml.dll`, `bin/ggml-base.dll`, and `bin/ggml-cpu.dll` to stay together so the CLI can launch successfully.
+- On this repo, `electron <script>` is not a reliable Windows smoke entry strategy; keep the supported path as `electron . --smoke-windows` so `--help` and future CLI flags exit cleanly through the app entrypoint.
+- On this Windows host, `electron-builder` local packaging can fail inside `winCodeSign` archive extraction because of symlink privileges; keep `win.signAndEditExecutable = false` for the unpacked local build path unless a later signing setup explicitly replaces it.
+- `npm run build:win:dir` is now the reliable local proof command for generating `dist/win-unpacked/` and validating that the packaged `Kory Whisper.exe` can start.
+- `src/renderer/settings.html` should never carry its own platform-specific shortcut/audio option tables again; if platform contract data is missing, render an unavailable state instead of inventing fallback keys or macOS cue names.
+- Windows cue playback now uses fixed native system sounds with no selectable cue names; keep the renderer toggle visible but hide the sound dropdowns when `supportedSoundNames` is empty.
+- `scripts/repo-hardgate.js` may see disappearing temp files during repository scans; tolerate `ENOENT` and rethrow other read failures so the hardgate stays both stable and honest.
 
 ## Stable Lessons
 
 - Keep platform policy out of business services; prefer injected runtime/profile facts over direct `process.platform` reads.
 - Keep doc truth, lint truth, and coverage truth aligned whenever a boundary changes.
+- If a platform UI contract rule needs a temporary exception, treat it as a short-lived migration aid and remove it as soon as the renderer/tray consume injected contract data.
+- The model download progress bridge now publishes object-shaped payloads (`percent`, `downloadedBytes`, `totalBytes`); composition-root and BrowserWindow fakes should log/assert against that normalized contract, not raw numbers.
 - macOS dictation still depends on Accessibility, Microphone, and Input Monitoring style recovery flows; settings navigation must stay accurate.
 - Whisper models should stay in the shared store `~/.kory-whisper/models/` instead of per-worktree repo paths.
 - Avoid natural-language style instructions in `whisper-cli --prompt`; keep script normalization in post-processing to avoid prompt-echo regressions.

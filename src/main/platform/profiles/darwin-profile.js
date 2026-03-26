@@ -6,6 +6,18 @@ const SUPPORTED_SOUND_NAMES = Object.freeze([
   'Hero'
 ]);
 
+const SHORTCUT_OPTIONS = Object.freeze([
+  Object.freeze({ key: 'RIGHT COMMAND', label: 'Right Command' }),
+  Object.freeze({ key: 'LEFT COMMAND', label: 'Left Command' }),
+  Object.freeze({ key: 'RIGHT OPTION', label: 'Right Option' }),
+  Object.freeze({ key: 'LEFT OPTION', label: 'Left Option' }),
+  Object.freeze({ key: 'RIGHT CONTROL', label: 'Right Control' }),
+  Object.freeze({ key: 'LEFT CONTROL', label: 'Left Control' }),
+  Object.freeze({ key: 'F13', label: 'F13' }),
+  Object.freeze({ key: 'F14', label: 'F14' }),
+  Object.freeze({ key: 'F15', label: 'F15' })
+]);
+
 const PERMISSION_UI_SURFACES = Object.freeze([
   {
     key: 'microphone',
@@ -46,9 +58,6 @@ module.exports = Object.freeze({
   id: 'darwin',
   displayName: 'macOS',
   configDefaults: Object.freeze({
-    shortcut: Object.freeze({
-      key: 'RIGHT COMMAND'
-    }),
     input: Object.freeze({
       method: 'applescript'
     })
@@ -74,6 +83,20 @@ module.exports = Object.freeze({
     })
   }),
   uiContract: Object.freeze({
+    shortcut: Object.freeze({
+      defaultKey: 'RIGHT COMMAND',
+      options: SHORTCUT_OPTIONS
+    }),
+    audioCues: Object.freeze({
+      supported: true,
+      supportedSoundNames: SUPPORTED_SOUND_NAMES,
+      defaultRecordingStartSound: 'Tink',
+      defaultOutputReadySound: 'Glass',
+      availabilityNote: 'macOS plays the selected system alert sounds.'
+    }),
+    settings: Object.freeze({
+      modelStorageHint: 'Speech models live in the shared user store under ~/.kory-whisper/models/.'
+    }),
     permission: Object.freeze({
       surfaces: PERMISSION_UI_SURFACES,
       surfaceOrder: Object.freeze(['microphone', 'accessibility', 'inputMonitoring']),

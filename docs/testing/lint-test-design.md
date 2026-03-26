@@ -27,6 +27,7 @@
 - The hardgate blocks `src/main/index.js` from reaching selector-owned platform modules directly.
 - The hardgate blocks non-selector production files from importing platform adapters or remaining legacy selector-owned platform leaves directly.
 - The hardgate blocks direct `process.platform` branching inside `src/main/services/`.
+- The hardgate blocks renderer and service files from owning platform-specific shortcut/audio option tables outside `src/main/platform/profiles/*.js`.
 - Tests cover the frozen seams around runtime, config, platform selection, and distribution truth.
 - Automated coverage is intentionally meaningful only for the stable seam subset, not for the whole Electron bootstrap path.
 
@@ -53,6 +54,7 @@
 | `LTD-002` | Only `src/main/platform/index.js` selects `src/main/platform/adapters/**` and the remaining legacy OS leaf modules | Automated proof exists | Platform implementation selection leaking into workflow files | lint |
 | `LTD-003` | Renderer files do not reach child-process, global keyboard, or bundled binary surfaces directly | Automated proof exists | UI layer collapsing into runtime/system API behavior | lint |
 | `LTD-004` | Business-service modules do not branch directly on `process.platform` | Automated proof exists | Runtime/platform policy leaking into service orchestration | lint |
+| `LTD-006` | Platform-specific shortcut/audio option tables live only in `src/main/platform/profiles/*.js` and are injected into renderer/service consumers | Automated proof exists | Renderer or service files re-owning platform-specific shortcut or audio option tables instead of consuming the canonical platform UI contract | lint |
 | `LTD-005` | Guarded seam coverage stays honest and narrow | Slice coverage is explicit now | Silent erosion of the only currently testable architecture slice | behavior test + coverage gate |
 
 ## Lint Rule Matrix
@@ -63,6 +65,7 @@
 | `LTD-002` | Platform selector is the singleton platform-implementation owner | Enforced | Adapter or legacy selector-leaf selection leaking into workflow files | `scripts/repo-hardgate.js` | error | error | none | none | Route platform implementation selection through `src/main/platform/index.js` |
 | `LTD-003` | Renderer stays on UI + IPC responsibilities | Enforced | Renderer reaching runtime/system APIs directly | `scripts/repo-hardgate.js` | error | error | none | none | Move runtime/system access behind IPC or platform helpers |
 | `LTD-004` | Business services stay platform-agnostic | Enforced | `process.platform` branching inside service orchestration | `scripts/repo-hardgate.js` | error | error | none | none | Resolve runtime/profile facts before branching |
+| `LTD-006` | Renderer/service files do not own platform-specific shortcut/audio option tables | Enforced | Fresh renderer/service UI tables drifting away from `src/main/platform/profiles/*.js` | `scripts/repo-hardgate.js` | error | error | none | none | Move the table into the canonical platform profile contract and inject it |
 
 ## Test Strategy Matrix
 
@@ -71,6 +74,7 @@
 | `LTD-005` | coverage gate | Stable seam slice only | phase-1 | `npm run test:coverage` fails threshold | `artifacts/windows-runtime-decoupling/test-coverage.md` | `LTE-001` | Slice excludes app/services/adapters/runtime-env until those seams are independently proved |
 | `LTD-001` | structural | Real repository import graph | phase-1 | `npm run lint` reports forbidden import edge | `artifacts/windows-runtime-decoupling/lint.md` | none | Repo-shape proof, not runtime behavior |
 | `LTD-004` | structural | `src/main/services/**` | phase-1 | `npm run lint` reports direct `process.platform` branching | `artifacts/windows-runtime-decoupling/lint.md` | none | Prevents platform policy from re-entering business services |
+| `LTD-006` | structural | `src/renderer/**` and `src/main/services/**` | phase-1 | `npm run lint` reports renderer or service ownership of platform-specific shortcut/audio option tables | `artifacts/windows-runtime-decoupling/lint.md` | none | Renderer and service files must consume injected platform UI contract data only |
 | `LTD-005` | behavior | App/runtime/config/platform/distribution seams | phase-1 | `npm test` fails focused assertions | `artifacts/windows-runtime-decoupling/test.md` | none | Keeps the frozen seam set executable |
 
 ## Structural Proof Matrix
@@ -81,13 +85,13 @@
 | `LTD-002` | `src/main/platform/index.js` is the platform selector singleton | Static import scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports non-selector production file importing platform adapters or legacy selector-owned leaves | Route selection through the platform selector | none |
 | `LTD-003` | Renderer remains UI-oriented | Static content scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports renderer use of forbidden runtime modules or binaries | Move system access to the main process and expose it via IPC | none |
 | `LTD-004` | `src/main/services/` stays platform-agnostic | Token-based content scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports `process.platform`, destructured aliases, or bracket access inside a service module | Resolve runtime/profile facts first, then branch outside the service layer | none |
+| `LTD-006` | `src/main/platform/profiles/*.js` owns platform shortcut/audio option tables | Static content scan in `scripts/repo-hardgate.js` | phase-1 | Lint reports a renderer or service file owning shortcut/audio option tables | Move the table into the platform profile contract and inject it | none |
 
 ## Exception Ledger
 
 | Exception Id | Invariant Id | Owner | Exact Scope | Current-Truth Mismatch | Reason | Target Phase Or Milestone | Removal Trigger | Ratchet Step | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `LTE-001` | `LTD-005` | repository | Coverage scope is limited to the stable seam slice, not whole `src/main/` | Electron bootstrap, service orchestration, runtime-env branching, and platform adapter implementations are not yet seam-friendly enough for honest whole-slice coverage | Avoid fake global threshold while still forcing proof on the cleanest current slice | next workflow-seam refactor milestone | Add isolated seams/tests for the remaining behavior-heavy modules | Expand coverage include-set only when the new seam gets its own proof | active |
-
 ## Ratchet Plan
 
 | Scope | Current State | Target State | Ratchet Trigger | Next Tightening Step | Blocking Evidence |

@@ -1,1 +1,1 @@
-Run the macOS interactive smoke matrix for tray, permissions, onboarding, and settings recovery, then record fresh evidence under `artifacts/macos-permission-onboarding/`.
+Run the unpacked Windows build on a real Windows host, verify the contract-driven settings/tray surfaces plus fixed native cue playback in normal app mode and `--smoke-windows`, and capture the first end-to-end RIGHT CONTROL -> record -> transcribe -> clipboard evidence.

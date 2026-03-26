@@ -63,3 +63,24 @@ test('embedded settings script keeps permissions as a single onboarding entry po
   assert.doesNotMatch(settingsHtml, /ipcRenderer\.invoke\('open-permission-settings'/);
   assert.doesNotMatch(settingsHtml, /data-permission-surface="microphone"/);
 });
+
+test('embedded settings script renders shortcut and cue controls from the injected platform ui contract', () => {
+  assert.match(settingsHtml, /platformUiContract/);
+  assert.match(settingsHtml, /renderShortcutOptions/);
+  assert.match(settingsHtml, /renderAudioCueOptions/);
+  assert.match(settingsHtml, /hasSelectableSounds/);
+  assert.match(settingsHtml, /recordingStartSoundField\.hidden = !hasSelectableSounds/);
+  assert.match(settingsHtml, /outputReadySoundField\.hidden = !hasSelectableSounds/);
+  assert.match(settingsHtml, /normalizeShortcutSelection/);
+  assert.match(settingsHtml, /normalizeAudioCueSelection/);
+  assert.match(settingsHtml, /audio-cues-unsupported/);
+  assert.match(settingsHtml, /shared model store/i);
+  assert.match(settingsHtml, /modelStorageHint/);
+
+  assert.doesNotMatch(settingsHtml, /RIGHT COMMAND/);
+  assert.doesNotMatch(settingsHtml, /RIGHT OPTION/);
+  assert.doesNotMatch(settingsHtml, /LEFT OPTION/);
+  assert.doesNotMatch(settingsHtml, /DEFAULT_SHORTCUT_OPTIONS/);
+  assert.doesNotMatch(settingsHtml, /Tink/);
+  assert.doesNotMatch(settingsHtml, /Glass/);
+});

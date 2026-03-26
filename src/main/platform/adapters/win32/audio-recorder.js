@@ -1,4 +1,4 @@
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -8,9 +8,13 @@ class AudioRecorderWin32 {
     this.sampleRate = options.sampleRate || 16000;
     this.channels = options.channels || 1;
     this.device = options.device || null;
+    this.explicitFfmpegBinary = options.ffmpegBinary || null;
+    this.spawnSync = options.spawnSync || spawnSync;
+    this.fileExists = options.fileExists || fs.existsSync;
     this.ffmpegProcess = null;
     this.outputPath = null;
     this.ffmpegBinary = null;
+    this.resolvedDevice = null;
   }
 
   buildPath() {
@@ -30,7 +34,7 @@ class AudioRecorderWin32 {
     const pathParts = pathValue.split(';').filter(Boolean);
     for (const dir of pathParts) {
       const fullPath = path.join(dir, binaryName);
-      if (fs.existsSync(fullPath)) {
+      if (this.fileExists(fullPath)) {
         return fullPath;
       }
     }
@@ -38,7 +42,12 @@ class AudioRecorderWin32 {
   }
 
   resolveFfmpegBinary() {
-    if (this.ffmpegBinary && fs.existsSync(this.ffmpegBinary)) {
+    if (this.explicitFfmpegBinary && this.fileExists(this.explicitFfmpegBinary)) {
+      this.ffmpegBinary = this.explicitFfmpegBinary;
+      return this.explicitFfmpegBinary;
+    }
+
+    if (this.ffmpegBinary && this.fileExists(this.ffmpegBinary)) {
       return this.ffmpegBinary;
     }
 
@@ -52,10 +61,67 @@ class AudioRecorderWin32 {
     return null;
   }
 
-  buildFfmpegArgs() {
+  listInputDevices(ffmpegBinary) {
+    const result = this.spawnSync(ffmpegBinary, ['-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'], {
+      encoding: 'utf8',
+      windowsHide: true,
+      env: {
+        ...process.env,
+        PATH: this.buildPath()
+      }
+    });
+    const output = [result.stdout || '', result.stderr || ''].join('\n');
+    const devices = [];
+
+    for (const rawLine of output.split(/\r?\n/)) {
+      const line = rawLine.trim();
+
+      if (line.includes('Alternative name')) {
+        continue;
+      }
+
+      const match = line.match(/"([^"]+)"\s+\((audio)\)/i);
+      if (match) {
+        devices.push(match[1]);
+      }
+    }
+
+    return devices;
+  }
+
+  choosePreferredDevice(devices = []) {
+    const usableDevices = devices.filter((deviceName) => deviceName && deviceName !== 'virtual-audio-capturer');
+    if (usableDevices.length === 0) {
+      return null;
+    }
+
+    const preferred = usableDevices.find((deviceName) => /microphone|mic|array|麦克风/i.test(deviceName));
+    return preferred || usableDevices[0];
+  }
+
+  resolveInputDevice() {
+    if (this.device) {
+      return this.device;
+    }
+
+    if (this.resolvedDevice) {
+      return this.resolvedDevice;
+    }
+
+    const ffmpegBinary = this.resolveFfmpegBinary();
+    if (!ffmpegBinary) {
+      return null;
+    }
+
+    const devices = this.listInputDevices(ffmpegBinary);
+    this.resolvedDevice = this.choosePreferredDevice(devices);
+    return this.resolvedDevice;
+  }
+
+  buildFfmpegArgs(deviceName) {
     return [
       '-f', 'dshow',
-      '-i', `audio=${this.device || 'virtual-audio-capturer'}`,
+      '-i', `audio=${deviceName}`,
       '-ac', this.channels.toString(),
       '-ar', this.sampleRate.toString(),
       '-acodec', 'pcm_s16le',
@@ -74,10 +140,14 @@ class AudioRecorderWin32 {
     if (!ffmpegBinary) {
       throw new Error('ffmpeg not found. Install ffmpeg and try again.');
     }
+    const inputDevice = this.resolveInputDevice();
+    if (!inputDevice) {
+      throw new Error('No DirectShow microphone input device is available for Windows recording.');
+    }
 
     return new Promise((resolve, reject) => {
       try {
-        const args = this.buildFfmpegArgs();
+        const args = this.buildFfmpegArgs(inputDevice);
         const env = {
           ...process.env,
           PATH: this.buildPath()

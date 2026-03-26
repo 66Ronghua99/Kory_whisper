@@ -5,6 +5,24 @@ const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
 const srcRoot = path.join(repoRoot, 'src');
+const PLATFORM_SHORTCUT_OPTION_TOKENS = [
+  'RIGHT COMMAND',
+  'LEFT COMMAND',
+  'RIGHT OPTION',
+  'LEFT OPTION',
+  'RIGHT CTRL',
+  'LEFT CTRL',
+  'F13',
+  'F14',
+  'F15'
+];
+const PLATFORM_AUDIO_CUE_OPTION_TOKENS = [
+  'Tink',
+  'Glass',
+  'Pop',
+  'Ping',
+  'Hero'
+];
 
 const JS_IMPORT_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)|import\s+(?:.+?\s+from\s+)?['"]([^'"]+)['"]/g;
 const PLATFORM_ADAPTER_PATTERN = /^src\/main\/platform\/adapters\/.+\.js$/;
@@ -27,8 +45,8 @@ const RENDERER_FORBIDDEN_PATTERNS = [
   }
 ];
 
-function toRepoPath(absolutePath) {
-  return path.relative(repoRoot, absolutePath).split(path.sep).join('/');
+function toRepoPath(absolutePath, root = repoRoot) {
+  return path.relative(root, absolutePath).split(path.sep).join('/');
 }
 
 function listFiles(dirPath) {
@@ -42,7 +60,7 @@ function listFiles(dirPath) {
       continue;
     }
 
-    if (entry.isFile() && fullPath.endsWith('.js')) {
+    if (entry.isFile() && (fullPath.endsWith('.js') || fullPath.endsWith('.html'))) {
       files.push(fullPath);
     }
   }
@@ -255,13 +273,41 @@ function hasServicePlatformBranch(content) {
   return false;
 }
 
-function analyzeRepository() {
+function countDistinctTokens(content, tokens) {
+  return tokens.reduce((count, token) => count + (content.includes(token) ? 1 : 0), 0);
+}
+
+function hasPlatformShortcutOptionTable(content) {
+  return countDistinctTokens(content, PLATFORM_SHORTCUT_OPTION_TOKENS) >= 3;
+}
+
+function hasPlatformAudioCueOptionTable(content) {
+  return countDistinctTokens(content, PLATFORM_AUDIO_CUE_OPTION_TOKENS) >= 3;
+}
+
+function hasPlatformUiOptionTable(content) {
+  return hasPlatformShortcutOptionTable(content) || hasPlatformAudioCueOptionTable(content);
+}
+
+function analyzeRepository(options = {}) {
+  return analyzeRepositoryInRoot(options.srcRoot || srcRoot);
+}
+
+function analyzeRepositoryInRoot(targetSrcRoot, targetRepoRoot = path.resolve(targetSrcRoot, '..')) {
   const violations = [];
-  const files = listFiles(srcRoot);
+  const files = listFiles(targetSrcRoot);
 
   for (const filePath of files) {
-    const repoPath = toRepoPath(filePath);
-    const content = fs.readFileSync(filePath, 'utf8');
+    const repoPath = toRepoPath(filePath, targetRepoRoot);
+    let content;
+    try {
+      content = fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        continue;
+      }
+      throw error;
+    }
     const imports = collectImports(filePath, content);
 
     for (const fileImport of imports) {
@@ -269,7 +315,7 @@ function analyzeRepository() {
         continue;
       }
 
-      const importedRepoPath = toRepoPath(fileImport.resolved);
+      const importedRepoPath = toRepoPath(fileImport.resolved, targetRepoRoot);
       const importsPlatformAdapter = PLATFORM_ADAPTER_PATTERN.test(importedRepoPath);
       const importsLegacyPlatformLeaf = PLATFORM_LEGACY_SELECTOR_PATTERN.test(importedRepoPath);
       const importsSelectorOwnedPlatformLeaf = importsPlatformAdapter || importsLegacyPlatformLeaf;
@@ -317,6 +363,17 @@ function analyzeRepository() {
         detail: 'Business-service modules must resolve runtime platform facts before branching instead of reading process.platform directly.'
       });
     }
+
+    if (
+      (repoPath.startsWith('src/renderer/') || repoPath.startsWith('src/main/services/')) &&
+      hasPlatformUiOptionTable(content)
+    ) {
+      violations.push({
+        ruleId: 'LTD-006',
+        file: repoPath,
+        detail: 'Platform-specific shortcut/audio option tables must live in the canonical platform profile owner (`src/main/platform/profiles/*.js`) and be injected through the platform UI contract instead of being owned by renderer or service files.'
+      });
+    }
   }
 
   return violations;
@@ -326,8 +383,8 @@ function formatViolations(violations) {
   return violations.map((violation) => `${violation.ruleId} ${violation.file}\n  ${violation.detail}`).join('\n');
 }
 
-function main() {
-  const violations = analyzeRepository();
+function main(options = {}) {
+  const violations = analyzeRepository(options);
   if (violations.length === 0) {
     console.log('repo-hardgate: OK');
     return 0;
@@ -344,5 +401,6 @@ if (require.main === module) {
 
 module.exports = {
   analyzeRepository,
-  formatViolations
+  formatViolations,
+  main
 };

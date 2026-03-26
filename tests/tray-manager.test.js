@@ -190,6 +190,43 @@ test('tray menu shows not-ready status and missing permissions when readiness is
   assert(labels.some((label) => label.includes('Input Monitoring')));
 });
 
+test('tray manager stores the injected platform ui contract for later menu renders', () => {
+  const { TrayManager } = loadTrayManager();
+  const manager = new TrayManager();
+  manager.tray = createTrayStub();
+
+  const contract = {
+    permission: {
+      menu: {
+        blockedHeader: '寰呭畬鎴愰厤缃?'
+      },
+      surfaceOrder: ['microphone'],
+      surfaces: [
+        {
+          key: 'microphone',
+          menuLabel: '楹﹀厠椋?'
+        }
+      ]
+    },
+    shortcut: {
+      defaultKey: 'RIGHT CONTROL',
+      options: [
+        { key: 'RIGHT CONTROL', label: 'Right Control' }
+      ]
+    },
+    audioCues: {
+      supported: false,
+      supportedSoundNames: []
+    }
+  };
+
+  manager.setPermissionReadiness(createBlockedReadinessSnapshot(), contract);
+
+  assert.equal(manager.platformUiContract, contract);
+  assert.equal(manager.getPermissionContractSurfaces()[0].key, 'microphone');
+  assert.equal(manager.getPermissionMenuContract().menu.blockedHeader, '寰呭畬鎴愰厤缃?');
+});
+
 test('ready permission state keeps the normal idle tooltip and affordance', () => {
   const { TrayManager } = loadTrayManager();
   const manager = new TrayManager();

@@ -100,20 +100,46 @@ test('darwin audio cue player swallows playback failures after logging', async (
   assert.match(errors[0], /Failed to play cue: recording-start/);
 });
 
-test('win32 audio cue player exposes the same cue methods as no-op calls', async () => {
-  const player = new AudioCuePlayerWin32();
+test('win32 audio cue player maps to fixed Windows system sounds without exposing selectable sound names', async () => {
+  const commands = [];
+  const player = new AudioCuePlayerWin32({
+    runCommand(command) {
+      commands.push(command);
+      return Promise.resolve();
+    }
+  });
 
-  await assert.doesNotReject(() => player.playRecordingStart());
-  await assert.doesNotReject(() => player.playOutputReady());
+  await player.playRecordingStart();
+  await player.playOutputReady();
+
+  assert.deepEqual(commands, [
+    '[System.Media.SystemSounds]::Asterisk.Play()',
+    '[System.Media.SystemSounds]::Exclamation.Play()'
+  ]);
 });
 
-test('config manager defaults audio cues to enabled with Tink and Glass', () => {
-  const configManager = new ConfigManager();
-  const config = configManager.getDefaultConfig();
+test('config manager derives audio cue defaults from the active platform profile contract', () => {
+  const darwinConfigManager = new ConfigManager({
+    runtimeEnv: {
+      platform: 'darwin',
+      homeDir: '/tmp/kory-darwin'
+    }
+  });
+  const win32ConfigManager = new ConfigManager({
+    runtimeEnv: {
+      platform: 'win32',
+      homeDir: 'C:\\Users\\tester'
+    }
+  });
 
-  assert.deepEqual(config.audioCues, {
+  assert.deepEqual(darwinConfigManager.getDefaultConfig().audioCues, {
     enabled: true,
     recordingStartSound: 'Tink',
     outputReadySound: 'Glass'
+  });
+  assert.deepEqual(win32ConfigManager.getDefaultConfig().audioCues, {
+    enabled: true,
+    recordingStartSound: 'Asterisk',
+    outputReadySound: 'Exclamation'
   });
 });

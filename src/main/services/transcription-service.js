@@ -1,7 +1,12 @@
 const applyPostProcessingDefault = require('../post-processing/apply-pipeline');
 const createDefaultPipeline = require('../post-processing/create-default-pipeline');
-const { createPostProcessingContext: createPostProcessingContextDefault } = require('../post-processing/context');
-const { EMPTY_VOCABULARY_DATA, loadVocabularyData: loadVocabularyDataDefault } = require('../vocabulary-data');
+const {
+  createPostProcessingContext: createPostProcessingContextDefault
+} = require('../post-processing/context');
+const {
+  EMPTY_VOCABULARY_DATA,
+  loadVocabularyData: loadVocabularyDataDefault
+} = require('../vocabulary-data');
 
 function resolveModelKey(model) {
   const validModels = ['base', 'small', 'medium'];
@@ -26,6 +31,30 @@ function getModelMinBytes(modelName) {
   return minBytes[modelName] || 50 * 1024 * 1024;
 }
 
+function showModelDownloadError(dialog, detail) {
+  if (!dialog || typeof dialog.showErrorBox !== 'function') {
+    return;
+  }
+
+  dialog.showErrorBox('模型下载失败', `Whisper 模型未能准备完成。\n${detail}`);
+}
+
+function normalizeProgressPayload(progress) {
+  if (progress && typeof progress === 'object' && !Array.isArray(progress)) {
+    return {
+      percent: progress.percent ?? null,
+      downloadedBytes: typeof progress.downloadedBytes === 'number' ? progress.downloadedBytes : null,
+      totalBytes: typeof progress.totalBytes === 'number' ? progress.totalBytes : null
+    };
+  }
+
+  return {
+    percent: progress ?? null,
+    downloadedBytes: null,
+    totalBytes: null
+  };
+}
+
 class TranscriptionService {
   constructor(options = {}) {
     this.whisperEngine = options.whisperEngine;
@@ -35,7 +64,8 @@ class TranscriptionService {
     this.config = options.config || {};
     this.logger = options.logger || console;
     this.loadVocabularyData = options.loadVocabularyData || loadVocabularyDataDefault;
-    this.createPostProcessingContext = options.createPostProcessingContext || createPostProcessingContextDefault;
+    this.createPostProcessingContext =
+      options.createPostProcessingContext || createPostProcessingContextDefault;
     this.applyPostProcessing = options.applyPostProcessing || applyPostProcessingDefault;
     this.postProcessingPipeline = options.postProcessingPipeline || createDefaultPipeline();
   }
@@ -84,7 +114,7 @@ class TranscriptionService {
       if (this.ensureModelReady && this.whisperEngine.modelPath !== nextModelPath) {
         const modelReady = await this.ensureModelReady(modelName);
         if (!modelReady) {
-          throw new Error('模型下载被取消，未切换模型');
+          throw new Error(`Model is not ready, keeping the current selection: ${modelName}`);
         }
       }
       modelPath = nextModelPath;
@@ -139,13 +169,74 @@ function createDownloadProgressWindow(BrowserWindow, modelName, modelSize) {
     <script>
       const { ipcRenderer } = require('electron');
       ipcRenderer.on('progress', (event, progress) => {
-        document.getElementById('progress').textContent = progress + '%';
+        const progressElement = document.getElementById('progress');
+        if (progress && typeof progress === 'object') {
+          if (progress.percent !== null && progress.percent !== undefined) {
+            progressElement.textContent = progress.percent + '%';
+            return;
+          }
+
+          const downloadedMb = progress.downloadedBytes !== null && progress.downloadedBytes !== undefined
+            ? (progress.downloadedBytes / (1024 * 1024)).toFixed(1)
+            : null;
+          const totalMb = progress.totalBytes !== null && progress.totalBytes !== undefined
+            ? (progress.totalBytes / (1024 * 1024)).toFixed(1)
+            : null;
+
+          if (downloadedMb !== null && totalMb !== null) {
+            progressElement.textContent = downloadedMb + ' MB / ' + totalMb + ' MB';
+            return;
+          }
+
+          if (downloadedMb !== null) {
+            progressElement.textContent = '已下载 ' + downloadedMb + ' MB';
+            return;
+          }
+        }
+
+        progressElement.textContent = String(progress) + '%';
       });
     </script>
     </html>
   `);
 
   return progressWindow;
+}
+
+function createProgressWindowBridge(BrowserWindow, modelName, modelSize) {
+  const progressWindow = createDownloadProgressWindow(BrowserWindow, modelName, modelSize);
+  if (!progressWindow || !progressWindow.webContents) {
+    return {
+      publish() {},
+      close() {}
+    };
+  }
+
+  let isReadyToReceiveProgress = typeof progressWindow.webContents.once !== 'function';
+  let latestProgress = null;
+
+  if (!isReadyToReceiveProgress) {
+    progressWindow.webContents.once('did-finish-load', () => {
+      isReadyToReceiveProgress = true;
+      if (latestProgress !== null && typeof progressWindow.webContents.send === 'function') {
+        progressWindow.webContents.send('progress', latestProgress);
+      }
+    });
+  }
+
+  return {
+    publish(progress) {
+      latestProgress = normalizeProgressPayload(progress);
+      if (isReadyToReceiveProgress && typeof progressWindow.webContents.send === 'function') {
+        progressWindow.webContents.send('progress', latestProgress);
+      }
+    },
+    close() {
+      if (typeof progressWindow.close === 'function') {
+        progressWindow.close();
+      }
+    }
+  };
 }
 
 async function ensureModelReady(options = {}) {
@@ -177,37 +268,39 @@ async function ensureModelReady(options = {}) {
 
   const result = await dialog.showMessageBox({
     type: 'info',
-    buttons: ['下载模型', '退出'],
+    buttons: ['下载模型', '取消'],
     defaultId: 0,
-    title: '需要下载语音模型',
-    message: '首次使用需要下载 Whisper 语音模型。',
-    detail: `模型: ${modelName}\n模型大小: 约 ${modelInfo.size}\n说明: ${modelInfo.desc}`
+    title: '需要语音模型',
+    message: '首次运行需要下载 Whisper 语音模型。',
+    detail: `模型: ${modelName}\n大小: 约 ${modelInfo.size}\n说明: ${modelInfo.desc}`
   });
 
   if (result.response !== 0) {
     return false;
   }
 
-  const progressWindow = createDownloadProgressWindow(BrowserWindow, modelName, modelInfo.size);
+  const progressWindow = createProgressWindowBridge(BrowserWindow, modelName, modelInfo.size);
 
   try {
     await modelDownloader.downloadModel(modelName, (progress) => {
-      if (progressWindow && progressWindow.webContents) {
-        progressWindow.webContents.send('progress', progress);
-      }
+      progressWindow.publish(progress);
     });
 
-    if (progressWindow) {
-      progressWindow.close();
+    progressWindow.close();
+
+    const downloadedModelCheck = await modelDownloader.checkModel(modelName);
+    if (!downloadedModelCheck.exists || downloadedModelCheck.size <= minSize) {
+      showModelDownloadError(
+        dialog,
+        `Downloaded file is incomplete for ${modelName}. Expected more than ${minSize} bytes, got ${downloadedModelCheck.size || 0}.`
+      );
+      return false;
     }
+
     return true;
   } catch (error) {
-    if (progressWindow) {
-      progressWindow.close();
-    }
-    if (dialog && typeof dialog.showErrorBox === 'function') {
-      dialog.showErrorBox('下载失败', `模型下载失败，请检查网络连接。\n${error.message}`);
-    }
+    progressWindow.close();
+    showModelDownloadError(dialog, error.message);
     return false;
   }
 }
@@ -246,9 +339,12 @@ async function prepareTranscriptionService(options = {}) {
     return null;
   }
 
-  const debugCaptureStore = options.debugCaptureStore || new DebugCaptureStore(runtimePaths.sharedDebugCapturesDir, {
-    onError: (message, error) => logger.error('[DebugCaptureStore]', message, error)
-  });
+  const debugCaptureStore = options.debugCaptureStore || new DebugCaptureStore(
+    runtimePaths.sharedDebugCapturesDir,
+    {
+      onError: (message, error) => logger.error('[DebugCaptureStore]', message, error)
+    }
+  );
 
   const whisperEngine = new WhisperEngine({
     modelPath: runtimePaths.getSharedModelPath(modelName),

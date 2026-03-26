@@ -1,15 +1,21 @@
 /**
  * Deps: fs, https, path, events
  * Used By: index.js
- * Last Updated: 2026-03-05
+ * Last Updated: 2026-03-26
  *
- * 模型下载器 - 自动下载 Whisper 模型文件
+ * Model downloader for Whisper model files.
  */
 
 const fs = require('fs').promises;
+const nodeFs = require('fs');
 const https = require('https');
 const path = require('path');
+const { Transform } = require('stream');
+const { pipeline } = require('stream/promises');
 const { EventEmitter } = require('events');
+
+const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+const MAX_REDIRECTS = 5;
 
 class ModelDownloader extends EventEmitter {
   constructor(options = {}) {
@@ -30,28 +36,21 @@ class ModelDownloader extends EventEmitter {
 
   async downloadModel(modelName = 'ggml-base.bin', onProgress = null) {
     const modelPath = path.join(this.modelsDir, modelName);
+    const tempPath = `${modelPath}.download`;
     const url = `${this.modelUrl}/${modelName}`;
 
     await fs.mkdir(this.modelsDir, { recursive: true });
+    await this.cleanupFile(tempPath);
 
-    return new Promise((resolve, reject) => {
-      const file = require('fs').createWriteStream(modelPath);
-      let downloadedBytes = 0;
-      let totalBytes = 0;
-
-      https.get(url, { redirect: true }, (response) => {
-        if (response.statusCode === 302 || response.statusCode === 301) {
-          // 跟随重定向
-          https.get(response.headers.location, (redirectResponse) => {
-            this.handleDownload(redirectResponse, file, modelPath, onProgress, resolve, reject);
-          }).on('error', reject);
-        } else {
-          this.handleDownload(response, file, modelPath, onProgress, resolve, reject);
-        }
-      }).on('error', (error) => {
-        reject(error);
-      });
-    });
+    try {
+      await this.downloadToTempFile(url, tempPath, modelName, onProgress);
+      await this.cleanupFile(modelPath);
+      await fs.rename(tempPath, modelPath);
+      return modelPath;
+    } catch (error) {
+      await this.cleanupFile(tempPath);
+      throw error;
+    }
   }
 
   async seedModelFromPath(sourcePath, modelName = 'ggml-base.bin') {
@@ -77,40 +76,91 @@ class ModelDownloader extends EventEmitter {
     };
   }
 
-  handleDownload(response, file, modelPath, onProgress, resolve, reject) {
-    const totalBytes = parseInt(response.headers['content-length'], 10);
-    let downloadedBytes = 0;
+  async downloadToTempFile(url, tempPath, modelName, onProgress, redirectCount = 0) {
+    if (redirectCount > MAX_REDIRECTS) {
+      throw new Error(`Too many redirects while downloading ${modelName}`);
+    }
 
-    response.on('data', (chunk) => {
-      downloadedBytes += chunk.length;
-      if (onProgress && totalBytes) {
-        const progress = (downloadedBytes / totalBytes * 100).toFixed(1);
-        onProgress(progress, downloadedBytes, totalBytes);
+    const response = await this.request(url);
+
+    if (REDIRECT_STATUS_CODES.has(response.statusCode) && response.headers.location) {
+      response.resume();
+      return this.downloadToTempFile(
+        response.headers.location,
+        tempPath,
+        modelName,
+        onProgress,
+        redirectCount + 1
+      );
+    }
+
+    if (response.statusCode !== 200) {
+      response.resume();
+      throw new Error(`Unexpected response status ${response.statusCode} while downloading ${modelName}`);
+    }
+
+    const parsedTotalBytes = parseInt(response.headers['content-length'], 10);
+    const totalBytes = Number.isFinite(parsedTotalBytes) ? parsedTotalBytes : null;
+    let downloadedBytes = 0;
+    const progressTracker = new Transform({
+      transform(chunk, encoding, callback) {
+        downloadedBytes += chunk.length;
+        if (onProgress) {
+          const progress = totalBytes
+            ? (downloadedBytes / totalBytes * 100).toFixed(1)
+            : null;
+          onProgress({
+            percent: progress,
+            downloadedBytes,
+            totalBytes
+          });
+        }
+        callback(null, chunk);
       }
     });
 
-    response.pipe(file);
+    await pipeline(response, progressTracker, nodeFs.createWriteStream(tempPath));
 
-    file.on('finish', () => {
-      file.close();
-      resolve(modelPath);
-    });
+    if (totalBytes && downloadedBytes !== totalBytes) {
+      throw new Error(`Incomplete download for ${modelName}: expected ${totalBytes} bytes, received ${downloadedBytes}`);
+    }
 
-    file.on('error', (error) => {
-      fs.unlink(modelPath).catch(() => {});
-      reject(error);
+    if (downloadedBytes <= 0) {
+      throw new Error(`Incomplete download for ${modelName}: received 0 bytes`);
+    }
+  }
+
+  request(url) {
+    return new Promise((resolve, reject) => {
+      https.get(url, (response) => {
+        resolve(response);
+      }).on('error', reject);
     });
+  }
+
+  async cleanupFile(filePath) {
+    if (!filePath) {
+      return;
+    }
+
+    try {
+      await fs.unlink(filePath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
   }
 
   getModelInfo(modelName) {
     const models = {
-      'ggml-tiny.bin': { size: '39 MB', desc: '速度最快，精度较低' },
-      'ggml-base.bin': { size: '141 MB', desc: '推荐，速度与精度平衡' },
-      'ggml-small.bin': { size: '466 MB', desc: '精度更高，速度稍慢' },
-      'ggml-medium.bin': { size: '769 MB', desc: '高精度，速度较慢' },
-      'ggml-large.bin': { size: '1.5 GB', desc: '最高精度，速度最慢' }
+      'ggml-tiny.bin': { size: '39 MB', desc: 'Fastest, with lower accuracy.' },
+      'ggml-base.bin': { size: '141 MB', desc: 'Recommended speed and accuracy balance.' },
+      'ggml-small.bin': { size: '466 MB', desc: 'Higher accuracy with slower speed.' },
+      'ggml-medium.bin': { size: '769 MB', desc: 'High accuracy with slower speed.' },
+      'ggml-large.bin': { size: '1.5 GB', desc: 'Highest accuracy with the slowest speed.' }
     };
-    return models[modelName] || { size: '未知', desc: '' };
+    return models[modelName] || { size: 'Unknown', desc: '' };
   }
 }
 

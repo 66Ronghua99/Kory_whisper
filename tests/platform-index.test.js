@@ -66,7 +66,7 @@ test('platform entrypoint resolves the win32 profile, adapter family, and capabi
   assert.equal(win32Platform.platform, 'win32');
   assert.equal(win32Platform.profile, win32Profile);
   assert.equal(win32Platform.capabilities, win32Profile.capabilities);
-  assert.equal(win32Platform.capabilities.audioCues.supported, false);
+  assert.equal(win32Platform.capabilities.audioCues.supported, true);
   assert.deepEqual(win32Platform.capabilities.permissions.surfaces, []);
   assert.deepEqual(win32Platform.adapterFamily, {
     platform: 'win32',
@@ -142,4 +142,48 @@ test('win32 audio recorder stop resolves even when stdin is unavailable', async 
   assert.equal(resolvedPath, outputPath);
 
   fs.unlinkSync(outputPath);
+});
+
+test('win32 audio recorder prefers an explicit ffmpeg binary path before PATH discovery', () => {
+  const explicitBinary = path.join(os.tmpdir(), `kory-whisper-ffmpeg-${process.pid}.exe`);
+  fs.writeFileSync(explicitBinary, 'ffmpeg');
+
+  try {
+    const recorder = new Win32AudioRecorder({
+      ffmpegBinary: explicitBinary
+    });
+
+    assert.equal(recorder.resolveFfmpegBinary(), explicitBinary);
+  } finally {
+    fs.unlinkSync(explicitBinary);
+  }
+});
+
+test('win32 audio recorder resolves a preferred DirectShow microphone instead of virtual-audio-capturer', () => {
+  const explicitBinary = path.join(os.tmpdir(), `kory-whisper-ffmpeg-${process.pid}-devices.exe`);
+  fs.writeFileSync(explicitBinary, 'ffmpeg');
+
+  try {
+    const recorder = new Win32AudioRecorder({
+      ffmpegBinary: explicitBinary,
+      spawnSync() {
+        return {
+          stdout: '',
+          stderr: [
+            '[in#0 @ 000001] "virtual-audio-capturer" (audio)',
+            '[in#0 @ 000001] "Microphone Array (Realtek(R) Audio)" (audio)',
+            '[in#0 @ 000001]   Alternative name "@device_cm_{...}\\wave_{...}"'
+          ].join('\n')
+        };
+      }
+    });
+
+    assert.equal(recorder.resolveInputDevice(), 'Microphone Array (Realtek(R) Audio)');
+    assert.deepEqual(
+      recorder.buildFfmpegArgs(recorder.resolveInputDevice()).slice(0, 4),
+      ['-f', 'dshow', '-i', 'audio=Microphone Array (Realtek(R) Audio)']
+    );
+  } finally {
+    fs.unlinkSync(explicitBinary);
+  }
 });

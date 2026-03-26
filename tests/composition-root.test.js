@@ -1694,7 +1694,10 @@ test('prepareTranscriptionService switches models through downloader-backed read
       constructor() {
         this.webContents = {
           send(channel, progress) {
-            events.push(`progress:${channel}:${progress}`);
+            const renderedProgress = progress && typeof progress === 'object'
+              ? progress.percent
+              : progress;
+            events.push(`progress:${channel}:${renderedProgress}`);
           }
         };
       }
@@ -1784,6 +1787,7 @@ test('prepareTranscriptionService switches models through downloader-backed read
     'download:ggml-small.bin',
     'progress:progress:50',
     'progress-window:close',
+    'check:ggml-small.bin',
     'engine:update:/models/ggml-small.bin'
   ]);
 });
@@ -2019,4 +2023,174 @@ test('composition root exposes platform ui contract through get-config payload',
   const contractFromRoot = root.getPlatformPermissionContract();
 
   assert.deepEqual(contractFromRoot, contract);
+});
+
+test('composition root exposes the full platform ui contract to renderer consumers', () => {
+  const handlers = {};
+  const contract = {
+    permission: {
+      surfaces: [
+        {
+          key: 'microphone',
+          onboardingLabel: '楹﹀厠椋?'
+        }
+      ],
+      surfaceOrder: ['microphone']
+    },
+    shortcut: {
+      defaultKey: 'RIGHT CONTROL',
+      options: [
+        { key: 'RIGHT CONTROL', label: 'Right Control' }
+      ]
+    },
+    audioCues: {
+      supported: false,
+      supportedSoundNames: []
+    }
+  };
+
+  const root = createCompositionRoot({
+    runtimeEnv: {
+      platform: 'win32'
+    },
+    platformApi: {
+      profile: {
+        uiContract: contract
+      }
+    },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT CONTROL', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: false },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      load: async () => {},
+      sanitizeForRenderer(config) {
+        return config;
+      },
+      save: async () => {}
+    }
+  });
+
+  root.registerIpcHandlers();
+
+  assert.deepEqual(handlers['get-config'](), {
+    shortcut: { key: 'RIGHT CONTROL', longPressDuration: 500 },
+    input: { appendSpace: true },
+    audioCues: { enabled: false },
+    whisper: { model: 'base', language: 'zh', prompt: '' },
+    vocabulary: { path: '/tmp/vocabulary.json' },
+    platformUiContract: contract,
+    platformContract: contract
+  });
+});
+
+test('composition root passes the full platform ui contract into tray readiness sync', () => {
+  let seenContract = null;
+  const contract = {
+    permission: {
+      surfaces: [],
+      surfaceOrder: []
+    },
+    shortcut: {
+      defaultKey: 'RIGHT CONTROL',
+      options: []
+    },
+    audioCues: {
+      supported: false,
+      supportedSoundNames: []
+    }
+  };
+
+  const root = createCompositionRoot({
+    runtimeEnv: {
+      platform: 'win32'
+    },
+    platformApi: {
+      profile: {
+        uiContract: contract
+      }
+    },
+    configManager: {
+      get() {
+        return {
+          shortcut: { key: 'RIGHT CONTROL', longPressDuration: 500 },
+          input: { appendSpace: true },
+          audioCues: { enabled: false },
+          whisper: { model: 'base', language: 'zh', prompt: '' },
+          vocabulary: { path: '/tmp/vocabulary.json' }
+        };
+      },
+      load: async () => {},
+      sanitizeForRenderer(config) {
+        return config;
+      },
+      save: async () => {}
+    }
+  });
+
+  root.services.tray = {
+    setPermissionReadiness(readiness, platformUiContract) {
+      seenContract = platformUiContract;
+    }
+  };
+
+  root.syncTrayPermissionReadiness({ isReady: false });
+
+  assert.deepEqual(seenContract, contract);
+});
+
+test('composition root uses the platform ui contract shortcut default when config omits a shortcut key', () => {
+  const root = createCompositionRoot({
+    runtimeEnv: {
+      platform: 'win32'
+    },
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    platformApi: {
+      profile: {
+        uiContract: {
+          shortcut: {
+            defaultKey: 'RIGHT CONTROL',
+            options: [
+              { key: 'RIGHT CONTROL', label: 'Right Control' }
+            ]
+          }
+        }
+      },
+      getAudioRecorder() {
+        return {};
+      },
+      getPermissionGateway() {
+        return {};
+      },
+      getAudioCuePlayer() {
+        return {};
+      },
+      getInputSimulator() {
+        return {};
+      }
+    }
+  });
+
+  const shortcutManager = root.createShortcutManager({
+    shortcut: {
+      longPressDuration: 700
+    }
+  });
+
+  assert.equal(shortcutManager.key, 'RIGHT CONTROL');
+  assert.equal(shortcutManager.longPressDuration, 700);
 });

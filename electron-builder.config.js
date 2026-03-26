@@ -29,6 +29,7 @@ module.exports = {
     extraResources: listElectronBuilderExtraResources('darwin')
   },
   win: {
+    signAndEditExecutable: false,
     extraResources: listElectronBuilderExtraResources('win32')
   }
 };

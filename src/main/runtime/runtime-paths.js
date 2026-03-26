@@ -9,6 +9,18 @@ const {
 const { getRuntimeFacts } = require('./runtime-capabilities');
 const { createRuntimeEnv } = require('./runtime-env');
 
+function resolveWhisperBinaryPath(runtimeEnv) {
+  return resolveBundledBinaryPath('whisper-cli', runtimeEnv);
+}
+
+function resolveFfmpegBinaryPath(runtimeEnv) {
+  if (runtimeEnv.platform !== 'win32') {
+    return null;
+  }
+
+  return resolveBundledBinaryPath('ffmpeg', runtimeEnv);
+}
+
 function createRuntimePaths(options = {}) {
   const runtimeEnv = options.runtimeEnv || createRuntimeEnv(options);
   const runtimeFacts = options.runtimeFacts || getRuntimeFacts(runtimeEnv);
@@ -23,7 +35,8 @@ function createRuntimePaths(options = {}) {
     sharedModelsDir,
     sharedDebugCapturesDir: joinPathSegments([sharedAppDir, 'debug-captures'], [sharedAppDir]),
     bundledModelsDir: resolvePackagedAssetPath('models', runtimeEnv),
-    whisperBinPath: resolveBundledBinaryPath('whisper-cli', runtimeEnv),
+    ffmpegBinPath: resolveFfmpegBinaryPath(runtimeEnv),
+    whisperBinPath: resolveWhisperBinaryPath(runtimeEnv),
     getSharedModelPath(modelName) {
       return getSharedModelPath(modelName, { homeDir: runtimeEnv.homeDir });
     },
@@ -37,5 +50,7 @@ function createRuntimePaths(options = {}) {
 }
 
 module.exports = {
-  createRuntimePaths
+  createRuntimePaths,
+  resolveFfmpegBinaryPath,
+  resolveWhisperBinaryPath
 };

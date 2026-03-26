@@ -16,10 +16,19 @@ function freezeClone(value) {
 
 const DISTRIBUTION_MANIFEST = freezeClone({
   bundledBinaries: {
+    ffmpeg: {
+      id: 'ffmpeg',
+      packaged: true,
+      packagedPlatforms: ['win32'],
+      relativePaths: {
+        default: 'bin/ffmpeg',
+        win32: 'bin/ffmpeg.exe'
+      }
+    },
     'whisper-cli': {
       id: 'whisper-cli',
       packaged: true,
-      packagedPlatforms: ['darwin'],
+      packagedPlatforms: ['darwin', 'win32'],
       relativePaths: {
         default: 'bin/whisper-cli',
         win32: 'bin/whisper-cli.exe'
@@ -37,7 +46,7 @@ const DISTRIBUTION_MANIFEST = freezeClone({
         filters: {
           default: ['**/*'],
           darwin: ['whisper-cli'],
-          win32: ['whisper-cli.exe']
+          win32: ['ffmpeg.exe', 'whisper-cli.exe', 'whisper.dll', 'ggml.dll', 'ggml-base.dll', 'ggml-cpu.dll']
         }
       }
     },
@@ -64,9 +73,14 @@ const DISTRIBUTION_MANIFEST = freezeClone({
     ],
     win32: [
       {
+        id: 'bundled-ffmpeg',
+        status: 'ready',
+        detail: 'Repository now bundles bin/ffmpeg.exe for Windows recording.'
+      },
+      {
         id: 'bundled-whisper-cli',
-        status: 'pending',
-        detail: 'Add bin/whisper-cli.exe before packaged win32 runtime can declare whisper-cli support.'
+        status: 'ready',
+        detail: 'Repository now bundles bin/whisper-cli.exe with the required ggml/whisper DLLs for Windows.'
       }
     ]
   }

@@ -185,18 +185,8 @@
       <h2>快捷键</h2>
       <div class="field">
         <label for="shortcutKey">触发键</label>
-        <select id="shortcutKey">
-          <option value="RIGHT COMMAND">右 Command (⌘)</option>
-          <option value="LEFT COMMAND">左 Command (⌘)</option>
-          <option value="RIGHT OPTION">右 Option (⌥)</option>
-          <option value="LEFT OPTION">左 Option (⌥)</option>
-          <option value="RIGHT CTRL">右 Control (⌃)</option>
-          <option value="LEFT CTRL">左 Control (⌃)</option>
-          <option value="F13">F13</option>
-          <option value="F14">F14</option>
-          <option value="F15">F15</option>
-        </select>
-        <p class="hint">长按触发键约 0.5 秒开始录音</p>
+        <select id="shortcutKey"></select>
+        <p class="hint" id="shortcutKeyHint"></p>
       </div>
       <div class="field">
         <label for="longPressDuration">长按触发时间 (毫秒)</label>
@@ -215,6 +205,7 @@
           <option value="medium">medium（更准）</option>
         </select>
         <p class="hint">medium 模型需要约 1.4GB 磁盘空间。</p>
+        <p class="hint" id="shared-model-store-hint"></p>
       </div>
       <div class="field">
         <label for="language">识别语言</label>
@@ -261,29 +252,18 @@
       <h2>提示音</h2>
       <div class="field checkbox-field">
         <input type="checkbox" id="audioCuesEnabled" checked>
-        <label for="audioCuesEnabled">启用录音开始 / 输出完成提示音</label>
+        <label for="audioCuesEnabled" id="audioCuesEnabledLabel">启用录音开始 / 输出完成提示音</label>
       </div>
-      <div class="field">
+      <div class="field" id="recordingStartSoundField">
         <label for="recordingStartSound">开始录音提示音</label>
-        <select id="recordingStartSound">
-          <option value="Tink">Tink（默认）</option>
-          <option value="Pop">Pop</option>
-          <option value="Ping">Ping</option>
-          <option value="Glass">Glass</option>
-          <option value="Hero">Hero</option>
-        </select>
+        <select id="recordingStartSound"></select>
       </div>
-      <div class="field">
+      <div class="field" id="outputReadySoundField">
         <label for="outputReadySound">输出完成提示音</label>
-        <select id="outputReadySound">
-          <option value="Glass">Glass（默认）</option>
-          <option value="Ping">Ping</option>
-          <option value="Pop">Pop</option>
-          <option value="Tink">Tink</option>
-          <option value="Hero">Hero</option>
-        </select>
+        <select id="outputReadySound"></select>
       </div>
-      <p class="hint">当前仅 macOS 会播放所选系统提示音；Windows 保留同配置接口，后续接入原生系统声音。</p>
+      <p class="hint" id="audioCuesHint"></p>
+      <p class="hint" id="audio-cues-unsupported" hidden></p>
     </div>
 
     <div class="actions">
@@ -297,10 +277,219 @@
   <script>
     const { ipcRenderer } = require('electron');
 
+    const UNAVAILABLE_SHORTCUT_VALUE = '__PLATFORM_CONTRACT_UNAVAILABLE__';
+
+    const DEFAULT_PLATFORM_UI_CONTRACT = Object.freeze({
+      shortcut: Object.freeze({
+        defaultKey: '',
+        options: Object.freeze([]),
+        availabilityNote: 'Shortcut options stay hidden until the active platform contract loads.'
+      }),
+      audioCues: Object.freeze({
+        supported: false,
+        supportedSoundNames: Object.freeze([]),
+        defaultRecordingStartSound: null,
+        defaultOutputReadySound: null,
+        availabilityNote: 'Audio cues are hidden on platforms that use a no-op cue player.'
+      }),
+      settings: Object.freeze({
+        modelStorageHint: 'Speech models live in the shared model store under the user profile, not the repo-local models/ folder.'
+      })
+    });
+
+    let currentPlatformUiContract = DEFAULT_PLATFORM_UI_CONTRACT;
+
+    function mergePlatformUiContract(rawContract = {}) {
+      const contract = rawContract && typeof rawContract === 'object' ? rawContract : {};
+      const shortcut = contract.shortcut || {};
+      const audioCues = contract.audioCues || {};
+      const hasExplicitSupportedFlag = Object.prototype.hasOwnProperty.call(audioCues, 'supported');
+      const shortcutOptions = Array.isArray(shortcut.options) && shortcut.options.length > 0
+        ? shortcut.options.filter((option) => option && option.key)
+        : DEFAULT_PLATFORM_UI_CONTRACT.shortcut.options;
+      const supportedSoundNames = Array.isArray(audioCues.supportedSoundNames)
+        ? audioCues.supportedSoundNames.filter(Boolean)
+        : DEFAULT_PLATFORM_UI_CONTRACT.audioCues.supportedSoundNames;
+
+      return {
+        ...DEFAULT_PLATFORM_UI_CONTRACT,
+        ...contract,
+        shortcut: {
+          ...DEFAULT_PLATFORM_UI_CONTRACT.shortcut,
+          ...shortcut,
+          options: shortcutOptions
+        },
+        audioCues: {
+          ...DEFAULT_PLATFORM_UI_CONTRACT.audioCues,
+          ...audioCues,
+          supported: hasExplicitSupportedFlag
+            ? audioCues.supported !== false
+            : DEFAULT_PLATFORM_UI_CONTRACT.audioCues.supported,
+          supportedSoundNames
+        }
+      };
+    }
+
+    function getShortcutOptions(contract = currentPlatformUiContract) {
+      return Array.isArray(contract.shortcut?.options) && contract.shortcut.options.length > 0
+        ? contract.shortcut.options
+        : [];
+    }
+
+    function getShortcutDefaultKey(contract = currentPlatformUiContract) {
+      return contract.shortcut?.defaultKey || getShortcutOptions(contract)[0]?.key || DEFAULT_PLATFORM_UI_CONTRACT.shortcut.defaultKey;
+    }
+
+    function normalizeShortcutSelection(contract = currentPlatformUiContract, selectedValue) {
+      const options = getShortcutOptions(contract).map((option) => option.key);
+      if (options.includes(selectedValue)) {
+        return selectedValue;
+      }
+
+      return getShortcutDefaultKey(contract);
+    }
+
+    function renderShortcutOptions(contract, selectedValue) {
+      const select = document.getElementById('shortcutKey');
+      const hint = document.getElementById('shortcutKeyHint');
+      const options = getShortcutOptions(contract);
+      const normalizedValue = normalizeShortcutSelection(contract, selectedValue);
+
+      select.innerHTML = '';
+      select.disabled = options.length === 0;
+
+      if (options.length === 0) {
+        const unavailableOption = document.createElement('option');
+        unavailableOption.value = UNAVAILABLE_SHORTCUT_VALUE;
+        unavailableOption.textContent = 'Unavailable';
+        unavailableOption.selected = true;
+        select.appendChild(unavailableOption);
+      }
+
+      options.forEach((option) => {
+        const renderedOption = document.createElement('option');
+        renderedOption.value = option.key;
+        renderedOption.textContent = option.label || option.key;
+        if (option.key === normalizedValue) {
+          renderedOption.selected = true;
+        }
+        select.appendChild(renderedOption);
+      });
+
+      hint.textContent = contract.shortcut?.availabilityNote
+        || `Available keys follow the ${contract.displayName || 'active'} platform contract.`;
+    }
+
+    function getAudioCueContract(contract = currentPlatformUiContract) {
+      return contract.audioCues && typeof contract.audioCues === 'object'
+        ? contract.audioCues
+        : DEFAULT_PLATFORM_UI_CONTRACT.audioCues;
+    }
+
+    function normalizeAudioCueSelection(contract, selectedValue, fallbackValue) {
+      const audioCueContract = getAudioCueContract(contract);
+      if (audioCueContract.supported === false) {
+        return fallbackValue ?? null;
+      }
+
+      const options = audioCueContract.supportedSoundNames || [];
+      if (options.includes(selectedValue)) {
+        return selectedValue;
+      }
+
+      return fallbackValue ?? options[0] ?? null;
+    }
+
+    function renderAudioCueOptions(selectId, contract, selectedValue) {
+      const select = document.getElementById(selectId);
+      const audioCueContract = getAudioCueContract(contract);
+      const options = audioCueContract.supported === false
+        ? []
+        : (audioCueContract.supportedSoundNames || []);
+      const normalizedValue = normalizeAudioCueSelection(contract, selectedValue, options[0] || null);
+
+      select.innerHTML = '';
+      options.forEach((soundName) => {
+        const renderedOption = document.createElement('option');
+        renderedOption.value = soundName;
+        renderedOption.textContent = soundName;
+        if (soundName === normalizedValue) {
+          renderedOption.selected = true;
+        }
+        select.appendChild(renderedOption);
+      });
+
+      return normalizedValue;
+    }
+
+    function renderAudioCueSection(contract, config) {
+      const audioCueContract = getAudioCueContract(contract);
+      const supported = audioCueContract.supported !== false;
+      const hasSelectableSounds = supported && (audioCueContract.supportedSoundNames || []).length > 0;
+      const hint = document.getElementById('audioCuesHint');
+      const unsupportedNotice = document.getElementById('audio-cues-unsupported');
+      const enabledCheckbox = document.getElementById('audioCuesEnabled');
+      const enabledLabel = document.getElementById('audioCuesEnabledLabel');
+      const recordingStartSoundField = document.getElementById('recordingStartSoundField');
+      const outputReadySoundField = document.getElementById('outputReadySoundField');
+      const recordingStartSound = renderAudioCueOptions(
+        'recordingStartSound',
+        contract,
+        config.audioCues?.recordingStartSound
+      );
+      const outputReadySound = renderAudioCueOptions(
+        'outputReadySound',
+        contract,
+        config.audioCues?.outputReadySound
+      );
+
+      enabledCheckbox.checked = supported && config.audioCues?.enabled !== false;
+      enabledCheckbox.disabled = !supported;
+      enabledLabel.textContent = supported
+        ? 'Recording start / output ready cues'
+        : 'Audio cues follow the active platform contract';
+
+      recordingStartSoundField.hidden = !hasSelectableSounds;
+      outputReadySoundField.hidden = !hasSelectableSounds;
+      unsupportedNotice.hidden = supported;
+      unsupportedNotice.textContent = supported
+        ? ''
+        : (audioCueContract.availabilityNote || 'Audio cues are unavailable on this platform.');
+      hint.textContent = audioCueContract.availabilityNote
+        || 'Audio cue rendering follows the active platform contract.';
+
+      if (!supported) {
+        document.getElementById('recordingStartSound').value = recordingStartSound || '';
+        document.getElementById('outputReadySound').value = outputReadySound || '';
+      }
+    }
+
+    function renderModelStorageHint(config, contract = currentPlatformUiContract) {
+      const hint = document.getElementById('shared-model-store-hint');
+      const modelPath = config.whisper?.modelPath || '';
+      const storageHint = contract.settings?.modelStorageHint
+        || config.whisper?.modelStorageHint
+        || DEFAULT_PLATFORM_UI_CONTRACT.settings.modelStorageHint;
+
+      hint.textContent = modelPath
+        ? `${storageHint} Active path: ${modelPath}`
+        : storageHint;
+    }
+
+    function loadPlatformUiContract(config) {
+      currentPlatformUiContract = mergePlatformUiContract(
+        config.platformUiContract || config.platformContract || {}
+      );
+      return currentPlatformUiContract;
+    }
+
     async function loadConfig() {
       const config = await ipcRenderer.invoke('get-config');
+      const platformUiContract = loadPlatformUiContract(config);
+      const shortcutKey = normalizeShortcutSelection(platformUiContract, config.shortcut?.key);
 
-      document.getElementById('shortcutKey').value = config.shortcut?.key || 'RIGHT COMMAND';
+      renderShortcutOptions(platformUiContract, shortcutKey);
+      document.getElementById('shortcutKey').value = shortcutKey;
       document.getElementById('longPressDuration').value = config.shortcut?.longPressDuration || 500;
       document.getElementById('model').value = config.whisper?.model || 'base';
       document.getElementById('language').value = config.whisper?.language || 'zh';
@@ -309,9 +498,8 @@
       document.getElementById('enablePunctuation').checked = config.whisper?.enablePunctuation !== false;
       document.getElementById('useVocabulary').checked = config.vocabulary?.enabled !== false;
       document.getElementById('appendSpace').checked = config.input?.appendSpace !== false;
-      document.getElementById('audioCuesEnabled').checked = config.audioCues?.enabled !== false;
-      document.getElementById('recordingStartSound').value = config.audioCues?.recordingStartSound || 'Tink';
-      document.getElementById('outputReadySound').value = config.audioCues?.outputReadySound || 'Glass';
+      renderAudioCueSection(platformUiContract, config);
+      renderModelStorageHint(config, platformUiContract);
     }
 
     function openPermissionOnboarding() {
@@ -326,12 +514,35 @@
 
     async function saveConfig() {
       const currentConfig = await ipcRenderer.invoke('get-config');
+      const platformUiContract = currentPlatformUiContract;
+      const { platformUiContract: _platformUiContract, platformContract: _platformContract, ...baseConfig } = currentConfig;
+      const shortcutKey = normalizeShortcutSelection(
+        platformUiContract,
+        document.getElementById('shortcutKey').value
+      );
+      const persistedShortcutKey = shortcutKey || currentConfig.shortcut?.key || null;
+      const audioCueContract = getAudioCueContract(platformUiContract);
+      const audioCueSupported = audioCueContract.supported !== false;
+      const recordingStartSound = audioCueSupported
+        ? normalizeAudioCueSelection(
+          platformUiContract,
+          document.getElementById('recordingStartSound').value,
+          audioCueContract.defaultRecordingStartSound
+        )
+        : null;
+      const outputReadySound = audioCueSupported
+        ? normalizeAudioCueSelection(
+          platformUiContract,
+          document.getElementById('outputReadySound').value,
+          audioCueContract.defaultOutputReadySound
+        )
+        : null;
 
       const newConfig = {
-        ...currentConfig,
+        ...baseConfig,
         shortcut: {
           ...currentConfig.shortcut,
-          key: document.getElementById('shortcutKey').value,
+          key: persistedShortcutKey,
           longPressDuration: asInt(
             document.getElementById('longPressDuration').value,
             500,
@@ -360,15 +571,15 @@
         },
         audioCues: {
           ...(currentConfig.audioCues || {}),
-          enabled: document.getElementById('audioCuesEnabled').checked,
-          recordingStartSound: document.getElementById('recordingStartSound').value,
-          outputReadySound: document.getElementById('outputReadySound').value
+          enabled: audioCueSupported ? document.getElementById('audioCuesEnabled').checked : false,
+          recordingStartSound,
+          outputReadySound
         }
       };
 
       try {
         await ipcRenderer.invoke('save-config', newConfig);
-        showStatus('设置已保存', 'success');
+        showStatus('Settings saved', 'success');
       } catch (error) {
         showStatus('保存失败: ' + error.message, 'error');
       }

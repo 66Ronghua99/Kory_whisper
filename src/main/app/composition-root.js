@@ -84,6 +84,11 @@ function normalizePermissionContractFromProfile(profile = {}) {
   return profile && profile.uiContract ? profile.uiContract : {};
 }
 
+function getPlatformShortcutDefaultKey(profile = {}) {
+  const uiContract = normalizePermissionContractFromProfile(profile);
+  return uiContract.shortcut?.defaultKey || 'RIGHT COMMAND';
+}
+
 class CompositionRoot {
   constructor(options = {}) {
     const electron = getElectronSurface(options);
@@ -163,6 +168,7 @@ class CompositionRoot {
     const shortcutManager = this.collaborators.shortcutManager || this.createShortcutManager(config);
     const trayManager = this.collaborators.trayManager || this.createTrayManager();
     const audioRecorder = this.collaborators.audioRecorder || this.platformApi.getAudioRecorder({
+      ffmpegBinary: this.runtimePaths && this.runtimePaths.ffmpegBinPath,
       sampleRate: 16000,
       channels: 1
     });
@@ -218,7 +224,7 @@ class CompositionRoot {
   createShortcutManager(config) {
     const ShortcutManager = require('../shortcut-manager');
     return new ShortcutManager({
-      key: config.shortcut?.key || 'RIGHT COMMAND',
+      key: config.shortcut?.key || getPlatformShortcutDefaultKey(this.platformApi.profile),
       longPressDuration: config.shortcut?.longPressDuration || 500,
       onInfo: (message) => this.logger.info('[ShortcutServer]', message),
       onError: (code) => this.logger.error('[ShortcutServer] exited with code:', code)
@@ -269,13 +275,15 @@ class CompositionRoot {
       if (typeof this.configManager.sanitizeForRenderer === 'function') {
         return {
           ...this.configManager.sanitizeForRenderer(this.configManager.get()),
-          platformContract: this.getPlatformPermissionContract()
+          platformContract: this.getPlatformPermissionContract(),
+          platformUiContract: this.getPlatformUiContract()
         };
       }
 
       return {
         ...sanitizeConfigForRenderer(this.configManager.get()),
-        platformContract: this.getPlatformPermissionContract()
+        platformContract: this.getPlatformPermissionContract(),
+        platformUiContract: this.getPlatformUiContract()
       };
     });
     this.ipcMain.handle('save-config', async (event, configPatch) => {
@@ -392,11 +400,15 @@ class CompositionRoot {
 
   syncTrayPermissionReadiness(readiness) {
     if (this.services.tray && typeof this.services.tray.setPermissionReadiness === 'function') {
-      this.services.tray.setPermissionReadiness(readiness, this.getPlatformPermissionContract());
+      this.services.tray.setPermissionReadiness(readiness, this.getPlatformUiContract());
     }
   }
 
   getPlatformPermissionContract() {
+    return normalizePermissionContractFromProfile(this.platformApi.profile || {});
+  }
+
+  getPlatformUiContract() {
     return normalizePermissionContractFromProfile(this.platformApi.profile || {});
   }
 

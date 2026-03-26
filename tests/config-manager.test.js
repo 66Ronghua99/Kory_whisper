@@ -7,8 +7,12 @@ const path = require('node:path');
 const ConfigManager = require('../src/main/config/config-manager.js');
 const { createConfigDefaults } = require('../src/main/config/config-defaults.js');
 const {
+  mergeConfigSections,
+  deriveUiContractDefaults,
   resolveConfigProfileDefaults
 } = require('../src/main/config/config-profile-defaults.js');
+const darwinProfile = require('../src/main/platform/profiles/darwin-profile.js');
+const win32Profile = require('../src/main/platform/profiles/win32-profile.js');
 const { createPostProcessingContext } = require('../src/main/post-processing/context.js');
 
 test('base config defaults stay platform-neutral until profile defaults are applied', () => {
@@ -20,9 +24,38 @@ test('base config defaults stay platform-neutral until profile defaults are appl
   assert.equal(defaults.shortcut.key, undefined);
   assert.equal(defaults.input.method, undefined);
   assert.equal(defaults.shortcut.longPressDuration, 500);
-  assert.equal(defaults.audioCues.recordingStartSound, 'Tink');
+  assert.equal(defaults.audioCues.enabled, false);
+  assert.equal(defaults.audioCues.recordingStartSound, null);
+  assert.equal(defaults.audioCues.outputReadySound, null);
   assert.equal(defaults.whisper.modelPath, '/tmp/kory-home/.kory-whisper/models/ggml-base.bin');
+  assert.match(defaults.whisper.modelStorageHint, /\.kory-whisper\/models/);
   assert.equal(defaults.vocabulary.path, '/tmp/kory-home/vocabulary.json');
+});
+
+test('base config defaults honor runtimeEnv homeDir and configDir fallback chains', () => {
+  const defaults = createConfigDefaults({
+    runtimeEnv: {
+      homeDir: '/tmp/runtime-home'
+    },
+    configDir: '/tmp/custom-config'
+  });
+
+  assert.equal(defaults.whisper.modelPath, '/tmp/runtime-home/.kory-whisper/models/ggml-base.bin');
+  assert.equal(defaults.whisper.modelStorageHint.includes('/tmp/runtime-home/.kory-whisper/models'), true);
+  assert.equal(defaults.vocabulary.path, '/tmp/custom-config/vocabulary.json');
+});
+
+test('base config defaults fall back to os.homedir when no homeDir is provided', () => {
+  const originalHomedir = os.homedir;
+  os.homedir = () => '/tmp/os-home';
+
+  try {
+    const defaults = createConfigDefaults();
+    assert.equal(defaults.whisper.modelPath, '/tmp/os-home/.kory-whisper/models/ggml-base.bin');
+    assert.equal(defaults.vocabulary.path, '/tmp/os-home/.kory-whisper/vocabulary.json');
+  } finally {
+    os.homedir = originalHomedir;
+  }
 });
 
 test('canonical config manager merges platform profile defaults without changing the persisted config shape', () => {
@@ -48,8 +81,52 @@ test('canonical config manager merges platform profile defaults without changing
   assert.equal(win32Defaults.shortcut.key, 'RIGHT CONTROL');
   assert.equal(win32Defaults.input.method, 'clipboard');
   assert.equal(win32Defaults.shortcut.enabled, true);
-  assert.equal(win32Defaults.audioCues.outputReadySound, 'Glass');
+  assert.equal(win32Defaults.audioCues.enabled, true);
+  assert.equal(win32Defaults.audioCues.recordingStartSound, 'Asterisk');
+  assert.equal(win32Defaults.audioCues.outputReadySound, 'Exclamation');
   assert.deepEqual(Object.keys(win32Defaults).sort(), Object.keys(darwinDefaults).sort());
+});
+
+test('platform ui contracts expose the shortcut and cue options the renderer should render', () => {
+  assert.deepEqual(
+    darwinProfile.uiContract.shortcut.options.map((option) => option.key),
+    [
+      'RIGHT COMMAND',
+      'LEFT COMMAND',
+      'RIGHT OPTION',
+      'LEFT OPTION',
+      'RIGHT CONTROL',
+      'LEFT CONTROL',
+      'F13',
+      'F14',
+      'F15'
+    ]
+  );
+  assert.equal(darwinProfile.uiContract.shortcut.defaultKey, 'RIGHT COMMAND');
+  assert.equal(darwinProfile.uiContract.audioCues.supported, true);
+  assert.deepEqual(darwinProfile.uiContract.audioCues.supportedSoundNames, [
+    'Tink',
+    'Glass',
+    'Pop',
+    'Ping',
+    'Hero'
+  ]);
+
+  assert.deepEqual(
+    win32Profile.uiContract.shortcut.options.map((option) => option.key),
+    [
+      'RIGHT CONTROL',
+      'LEFT CONTROL',
+      'F13',
+      'F14',
+      'F15'
+    ]
+  );
+  assert.equal(win32Profile.uiContract.shortcut.defaultKey, 'RIGHT CONTROL');
+  assert.equal(win32Profile.uiContract.audioCues.supported, true);
+  assert.deepEqual(win32Profile.uiContract.audioCues.supportedSoundNames, []);
+  assert.equal(win32Profile.uiContract.audioCues.defaultRecordingStartSound, 'Asterisk');
+  assert.equal(win32Profile.uiContract.audioCues.defaultOutputReadySound, 'Exclamation');
 });
 
 test('profile defaults can come from explicit profile input instead of hard-coded platform branches', () => {
@@ -75,6 +152,96 @@ test('profile defaults can come from explicit profile input instead of hard-code
       method: 'clipboard'
     }
   });
+});
+
+test('profile defaults are derived from the active platform ui contract before explicit overrides', () => {
+  const darwinDefaults = resolveConfigProfileDefaults({
+    runtimeEnv: { platform: 'darwin' },
+    profile: darwinProfile
+  });
+
+  const win32Defaults = resolveConfigProfileDefaults({
+    runtimeEnv: { platform: 'win32' },
+    profile: win32Profile
+  });
+
+  assert.equal(darwinDefaults.shortcut.key, 'RIGHT COMMAND');
+  assert.equal(darwinDefaults.audioCues.enabled, true);
+  assert.equal(darwinDefaults.audioCues.recordingStartSound, 'Tink');
+  assert.equal(darwinDefaults.audioCues.outputReadySound, 'Glass');
+  assert.equal(win32Defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(win32Defaults.audioCues.enabled, true);
+  assert.equal(win32Defaults.audioCues.recordingStartSound, 'Asterisk');
+  assert.equal(win32Defaults.audioCues.outputReadySound, 'Exclamation');
+});
+
+test('profile default merging keeps undefined overrides inert while honoring null and array overrides explicitly', () => {
+  const defaults = resolveConfigProfileDefaults({
+    runtimeEnv: { platform: 'darwin' },
+    profileDefaults: {
+      shortcut: {
+        key: undefined
+      },
+      input: null,
+      audioCues: ['unexpected-array-shape']
+    }
+  });
+
+  assert.deepEqual(defaults.shortcut, {
+    key: 'RIGHT COMMAND'
+  });
+  assert.equal(defaults.input, null);
+  assert.deepEqual(defaults.audioCues, ['unexpected-array-shape']);
+});
+
+test('profile merge helper preserves base arrays when override is not an array', () => {
+  assert.deepEqual(
+    mergeConfigSections(['keep-me'], { unexpected: true }),
+    ['keep-me']
+  );
+});
+
+test('deriveUiContractDefaults normalizes missing supported cue defaults to null', () => {
+  assert.deepEqual(
+    deriveUiContractDefaults({
+      uiContract: {
+        shortcut: {
+          defaultKey: 'F13'
+        },
+        audioCues: {
+          supported: true
+        }
+      }
+    }),
+    {
+      shortcut: {
+        key: 'F13'
+      },
+      audioCues: {
+        enabled: true,
+        recordingStartSound: null,
+        outputReadySound: null
+      }
+    }
+  );
+});
+
+test('profile defaults can resolve platform from profile metadata when runtimeEnv is absent', () => {
+  const defaults = resolveConfigProfileDefaults({
+    profile: {
+      platform: 'win32'
+    }
+  });
+
+  assert.equal(defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(defaults.input.method, 'clipboard');
+});
+
+test('profile defaults fall back to process.platform when no platform hint is provided', () => {
+  const defaults = resolveConfigProfileDefaults();
+
+  assert.equal(defaults.shortcut.key, 'RIGHT CONTROL');
+  assert.equal(defaults.input.method, 'clipboard');
 });
 
 test('unsupported platforms fall back to safe profile defaults that preserve persisted config shape', () => {
@@ -118,7 +285,11 @@ test('constructor composes partial runtimeEnv with explicit top-level overrides 
 });
 
 test('config manager merges nested overrides without dropping defaults', () => {
-  const configManager = new ConfigManager();
+  const configManager = new ConfigManager({
+    runtimeEnv: {
+      platform: 'win32'
+    }
+  });
 
   const merged = configManager.mergeWithDefaults({
     whisper: {
@@ -140,7 +311,8 @@ test('config manager merges nested overrides without dropping defaults', () => {
   assert.equal(merged.whisper.llm.remote.timeoutMs, 1800);
   assert.equal(merged.whisper.llm.remote.model, 'gpt-4o-mini');
   assert.equal(merged.input.appendSpace, false);
-  assert.equal(merged.audioCues.recordingStartSound, 'Tink');
+  assert.equal(merged.audioCues.enabled, true);
+  assert.equal(merged.audioCues.recordingStartSound, 'Asterisk');
   assert.equal(merged.postProcessing.enabled, true);
   assert.equal(merged.postProcessing.pipeline, 'default');
   assert.equal(merged.postProcessing.stages.basicItn, true);
