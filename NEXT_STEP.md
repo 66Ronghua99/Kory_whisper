@@ -1,1 +1,1 @@
-Run the macOS interactive smoke matrix for tray, permissions, onboarding, and settings recovery, then record fresh evidence under `artifacts/macos-permission-onboarding/`.
+Review and approve `docs/superpowers/specs/2026-04-16-aliyun-byok-cloud-asr-design.md`, then create the implementation plan for the Aliyun BYOK cloud ASR path.

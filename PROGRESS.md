@@ -28,11 +28,13 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 
 ## In Progress
 
+- Drafting the Aliyun BYOK cloud ASR default-mode spec while preserving the current dictation workflow.
 - Preparing the first Windows-native implementation loop behind the frozen runtime/profile seams.
 - macOS permission onboarding verification is complete at the repo-doc level; manual macOS evidence still needs a real host capture.
 
 ## Pending
 
+- Review and approve the Aliyun BYOK cloud ASR spec, then write the implementation plan.
 - Implement the first Windows-native behavior loop on top of the `win32` profile and adapter paths.
 - Run the macOS interactive smoke matrix on a mac host to refresh tray/permission/path evidence.
 - Run a manual dictation/settings smoke pass for the merged ASR post-processing path on a mac host and capture fresh evidence.
