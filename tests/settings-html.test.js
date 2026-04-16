@@ -9,6 +9,11 @@ const settingsHtml = fs.readFileSync(
 );
 
 test('settings html replaces the old llm controls with one top-level ASR post-processing toggle', () => {
+  assert.match(settingsHtml, /id="asrMode"/);
+  assert.match(settingsHtml, /id="aliyunApiKey"/);
+  assert.match(settingsHtml, /id="testAsrConnection"/);
+  assert.match(settingsHtml, /阿里云百炼 Paraformer/);
+  assert.match(settingsHtml, /help\.aliyun\.com\/zh\/model-studio\/get-api-key/);
   assert.match(settingsHtml, /id="enablePostProcessing"/);
   assert.match(settingsHtml, />启用 ASR 后处理</);
   assert.match(settingsHtml, /id="outputScript"/);
@@ -25,6 +30,18 @@ test('settings html replaces the old llm controls with one top-level ASR post-pr
 });
 
 test('embedded settings script reads and writes postProcessing enabled without using whisper llm', () => {
+  assert.match(
+    settingsHtml,
+    /document\.getElementById\('asrMode'\)\.value = config\.asr\?\.mode \|\| 'cloud';/
+  );
+  assert.match(
+    settingsHtml,
+    /document\.getElementById\('aliyunApiKey'\)\.value = '';/
+  );
+  assert.match(
+    settingsHtml,
+    /asr:\s*\{\s*\.\.\.\(currentConfig\.asr \|\| \{\}\),\s*mode: document\.getElementById\('asrMode'\)\.value/s
+  );
   assert.match(
     settingsHtml,
     /document\.getElementById\('enablePostProcessing'\)\.checked = config\.postProcessing\?\.enabled !== false;/

@@ -9,6 +9,8 @@ const TrayService = require('../services/tray-service');
 const ShortcutService = require('../services/shortcut-service');
 const PermissionService = require('../services/permission-service');
 const DictationService = require('../services/dictation-service');
+const { redactSecretText } = require('../asr/errors');
+const { redactSecrets } = require('../asr/redact-secrets');
 
 function getElectronSurface(overrides = {}) {
   if (overrides.electron) {
@@ -77,7 +79,7 @@ function sanitizeConfigForRenderer(config = {}) {
     delete sanitized.whisper.llm;
   }
 
-  return sanitized;
+  return redactSecrets(sanitized);
 }
 
 function normalizePermissionContractFromProfile(profile = {}) {
@@ -286,6 +288,7 @@ class CompositionRoot {
       await this.applyRuntimeConfig(nextConfig);
       await this.configManager.save(nextConfig);
     });
+    this.ipcMain.handle('test-asr-connection', async (event, configPatch) => this.testAsrConnection(configPatch));
     this.ipcMain.handle('open-vocab-editor', () => this.openVocabEditor());
     this.ipcMain.handle('get-permission-readiness', async () => this.safePermissionReadiness('check'));
     this.ipcMain.handle('recheck-permission-readiness', async () => {
@@ -306,6 +309,44 @@ class CompositionRoot {
         this.shell.openPath(this.loggerModule.getLogPath());
       }
     });
+  }
+
+  async testAsrConnection(configPatch = {}) {
+    const nextConfig = typeof this.configManager.mergeRendererPatch === 'function'
+      ? this.configManager.mergeRendererPatch(this.configManager.get(), configPatch)
+      : mergeConfigPatch(this.configManager.get(), configPatch);
+    const apiKey = nextConfig.asr?.cloud?.apiKey || '';
+
+    try {
+      if (typeof this.collaborators.asrConnectionTester === 'function') {
+        const result = await this.collaborators.asrConnectionTester(nextConfig);
+        return {
+          ok: true,
+          ...(result && typeof result === 'object' ? result : {})
+        };
+      }
+
+      if (nextConfig.asr?.mode === 'cloud' && !apiKey.trim()) {
+        throw new Error('Aliyun API key is required for cloud ASR');
+      }
+
+      if (nextConfig.asr?.mode === 'cloud') {
+        const AliyunParaformerEngine = require('../asr/aliyun-paraformer-engine');
+        const engine = new AliyunParaformerEngine({
+          apiKey,
+          model: nextConfig.asr?.cloud?.model || 'paraformer-realtime-v2',
+          timeoutMs: nextConfig.asr?.cloud?.timeoutMs || 30000
+        });
+        return await engine.testConnection();
+      }
+
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: redactSecretText(error.message || error, [apiKey])
+      };
+    }
   }
 
   async applyRuntimeConfig(config) {

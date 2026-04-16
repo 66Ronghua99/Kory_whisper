@@ -217,6 +217,7 @@ async function prepareTranscriptionService(options = {}) {
   const config = options.config || {};
   const logger = options.logger || console;
   const WhisperEngine = options.WhisperEngine || require('../whisper-engine');
+  const AliyunParaformerEngine = options.AliyunParaformerEngine || require('../asr/aliyun-paraformer-engine');
   const DebugCaptureStore = options.DebugCaptureStore || require('../debug-capture-store');
   const injectedWhisperEngine = options.whisperEngine || null;
 
@@ -224,6 +225,27 @@ async function prepareTranscriptionService(options = {}) {
   if (injectedWhisperEngine) {
     return new TranscriptionService({
       whisperEngine: injectedWhisperEngine,
+      config,
+      logger,
+      defaultVocabPath: config.vocabulary?.path,
+      loadVocabularyData: options.loadVocabularyData,
+      createPostProcessingContext: options.createPostProcessingContext,
+      applyPostProcessing: options.applyPostProcessing,
+      postProcessingPipeline: options.postProcessingPipeline
+    });
+  }
+
+  if (config.asr?.mode === 'cloud') {
+    const cloudConfig = config.asr?.cloud || {};
+    const cloudEngine = new AliyunParaformerEngine({
+      apiKey: cloudConfig.apiKey || '',
+      model: cloudConfig.model || 'paraformer-realtime-v2',
+      timeoutMs: cloudConfig.timeoutMs || 30000,
+      languageHints: cloudConfig.languageHints || ['zh', 'en']
+    });
+
+    return new TranscriptionService({
+      whisperEngine: cloudEngine,
       config,
       logger,
       defaultVocabPath: config.vocabulary?.path,

@@ -1,6 +1,6 @@
 ---
 doc_type: spec
-status: draft
+status: approved
 supersedes: []
 related:
   - docs/superpowers/specs/2026-03-23-asr-post-processing-pipeline-design.md

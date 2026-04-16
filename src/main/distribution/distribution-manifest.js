@@ -44,6 +44,7 @@ const DISTRIBUTION_MANIFEST = freezeClone({
     {
       id: 'models',
       relativePath: 'models',
+      packagedByDefault: false,
       packagedPlatforms: ['darwin', 'win32'],
       builder: {
         from: 'models',
@@ -136,11 +137,13 @@ function getInstallerPrerequisites(platform) {
 }
 
 function listElectronBuilderExtraResources(platform) {
-  return listPackagedAssets({ platform }).map((asset) => ({
-    from: asset.builder.from,
-    to: asset.builder.to,
-    filter: [...getBuilderFilter(asset.builder, platform)]
-  }));
+  return listPackagedAssets({ platform })
+    .filter((asset) => asset.packagedByDefault !== false)
+    .map((asset) => ({
+      from: asset.builder.from,
+      to: asset.builder.to,
+      filter: [...getBuilderFilter(asset.builder, platform)]
+    }));
 }
 
 module.exports = {

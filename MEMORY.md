@@ -13,6 +13,7 @@
 - The shared Whisper model store is already canonical on `master`; future worktree reconciliation should compare against `src/main/shared/model-paths.js` before trying to re-merge old model-cache branches.
 - Do not recreate deleted top-level shims such as `src/main/config-manager.js` or `src/main/model-paths.js`; import the canonical config/shared modules directly.
 - The removed Mac-only legacy bucket and unused local/remote LLM post-process experiments are now outside the repo contract; keep them gone unless a new approved spec explicitly reintroduces them.
+- Aliyun BYOK cloud ASR lives under `src/main/asr/`; keep provider-specific protocol and secret redaction out of `DictationService` and injection services.
 
 ## Stable Lessons
 
@@ -28,3 +29,5 @@
 - The approved implementation route for permission UX is: normalize permission facts into one shared readiness snapshot first, then drive tray/menu state, onboarding UI, settings visibility, and dictation guards from that single snapshot.
 - Guarded coverage for the permission onboarding loop now includes the canonical shared readiness seam listed in `.c8rc.json`.
 - Input Monitoring must stay unresolved at startup when the platform check is only `unknown`; the first real shortcut event should validate it instead of immediately reopening System Settings.
+- Cloud ASR must not silently fall back to local Whisper on provider failure; that would surprise users with downloads and privacy behavior.
+- Renderer config must never echo stored `asr.cloud.apiKey`; blank API key fields in settings should preserve the already-stored local secret unless the user enters a replacement.

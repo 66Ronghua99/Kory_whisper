@@ -29,6 +29,7 @@
   "dependencies": {
     "node-record-lpcm16": "^1.0.1",
     "opencc-js": "^1.0.5",
-    "uiohook-napi": "^1.5.4"
+    "uiohook-napi": "^1.5.4",
+    "ws": "^8.20.0"
   }
 }

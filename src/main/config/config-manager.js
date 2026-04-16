@@ -6,6 +6,7 @@ const { getSharedAppDir, joinPathSegments } = require('../shared/model-paths');
 const { createConfigDefaults } = require('./config-defaults');
 const { resolveConfigProfileDefaults } = require('./config-profile-defaults');
 const { normalizeConfig } = require('../post-processing/context');
+const { redactSecrets } = require('../asr/redact-secrets');
 
 function resolveRuntimeEnv(options = {}) {
   const runtimeEnv = options.runtimeEnv || {};
@@ -142,7 +143,7 @@ class ConfigManager {
       delete sanitized.whisper.llm;
     }
 
-    return sanitized;
+    return redactSecrets(sanitized);
   }
 
   deepMerge(base, override) {

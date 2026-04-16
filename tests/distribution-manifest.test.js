@@ -83,6 +83,21 @@ test('electron-builder config sources platform resource slots from the distribut
   );
 });
 
+test('cloud default packaging does not bundle Whisper models as default resources', () => {
+  assert.deepEqual(
+    listElectronBuilderExtraResources('darwin').map((resource) => resource.to),
+    ['bin']
+  );
+  assert.deepEqual(
+    listElectronBuilderExtraResources('win32').map((resource) => resource.to),
+    ['bin']
+  );
+  assert.equal(
+    listPackagedAssets({ platform: 'darwin' }).find((asset) => asset.id === 'models').packagedByDefault,
+    false
+  );
+});
+
 test('distribution manifest darwin packaged binary maps to a file that exists in this worktree', () => {
   const binary = getBundledBinary('whisper-cli', { platform: 'darwin', isPackaged: true });
   const repoBinaryPath = path.join(__dirname, '..', binary.relativePath);

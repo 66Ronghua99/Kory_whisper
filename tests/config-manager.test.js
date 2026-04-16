@@ -22,6 +22,11 @@ test('base config defaults stay platform-neutral until profile defaults are appl
   assert.equal(defaults.shortcut.longPressDuration, 500);
   assert.equal(defaults.audioCues.recordingStartSound, 'Tink');
   assert.equal(defaults.whisper.modelPath, '/tmp/kory-home/.kory-whisper/models/ggml-base.bin');
+  assert.equal(defaults.asr.mode, 'cloud');
+  assert.equal(defaults.asr.cloud.provider, 'aliyun-paraformer');
+  assert.equal(defaults.asr.cloud.model, 'paraformer-realtime-v2');
+  assert.equal(defaults.asr.cloud.apiKey, '');
+  assert.equal(defaults.asr.local.model, 'base');
   assert.equal(defaults.vocabulary.path, '/tmp/kory-home/vocabulary.json');
 });
 
@@ -351,4 +356,27 @@ test('legacy whisper llm config stays inert while postProcessing enabled and out
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test('renderer config hides Aliyun API keys while preserving cloud ASR settings', () => {
+  const configManager = new ConfigManager();
+  const config = configManager.mergeWithDefaults({
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        provider: 'aliyun-paraformer',
+        model: 'paraformer-realtime-v2',
+        apiKey: 'sk-secret-key',
+        timeoutMs: 42000
+      }
+    }
+  });
+
+  const rendererConfig = configManager.sanitizeForRenderer(config);
+
+  assert.equal(rendererConfig.asr.mode, 'cloud');
+  assert.equal(rendererConfig.asr.cloud.provider, 'aliyun-paraformer');
+  assert.equal(rendererConfig.asr.cloud.model, 'paraformer-realtime-v2');
+  assert.equal(rendererConfig.asr.cloud.timeoutMs, 42000);
+  assert.equal(rendererConfig.asr.cloud.apiKey, '');
 });

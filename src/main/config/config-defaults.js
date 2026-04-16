@@ -54,6 +54,18 @@ function createConfigDefaults(options = {}) {
         }
       }
     },
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        provider: 'aliyun-paraformer',
+        model: 'paraformer-realtime-v2',
+        apiKey: '',
+        timeoutMs: 30000
+      },
+      local: {
+        model: 'base'
+      }
+    },
     vocabulary: {
       enabled: true,
       path: vocabPath

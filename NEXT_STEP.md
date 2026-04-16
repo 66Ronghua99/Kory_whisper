@@ -1,1 +1,1 @@
-Review and approve `docs/superpowers/specs/2026-04-16-aliyun-byok-cloud-asr-design.md`, then create the implementation plan for the Aliyun BYOK cloud ASR path.
+Run a real-key Aliyun BYOK cloud ASR smoke test from the settings flow and dictation flow, then record the result under `artifacts/aliyun-byok-cloud-asr/`.

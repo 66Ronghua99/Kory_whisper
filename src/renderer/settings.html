@@ -63,6 +63,7 @@
     }
 
     input[type="number"],
+    input[type="password"],
     select {
       width: 100%;
       padding: 8px 12px;
@@ -163,6 +164,19 @@
       gap: 8px;
       margin-top: 2px;
     }
+
+    .inline-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .inline-links a {
+      color: #007AFF;
+      text-decoration: none;
+    }
   </style>
 </head>
 <body>
@@ -207,6 +221,30 @@
 
     <div class="section">
       <h2>语音识别</h2>
+      <div class="field">
+        <label for="asrMode">识别方式</label>
+        <select id="asrMode">
+          <option value="cloud">云端模型（推荐，小包体，按量付费）</option>
+          <option value="local">本地 Whisper（离线，需下载模型）</option>
+        </select>
+        <p class="hint">云端模式会从本机直连你自己的阿里云账号，Kory Whisper 不经过自有服务器。</p>
+      </div>
+      <div class="field">
+        <label>云端平台</label>
+        <p class="hint">阿里云百炼 Paraformer（paraformer-realtime-v2）</p>
+      </div>
+      <div class="field">
+        <label for="aliyunApiKey">阿里云百炼 API Key</label>
+        <input type="password" id="aliyunApiKey" placeholder="sk-...">
+        <p class="hint">API Key 只保存在本机。留空保存时会保留已配置的 Key。</p>
+        <div class="inline-links">
+          <a href="https://help.aliyun.com/zh/model-studio/get-api-key">如何申请 API Key</a>
+          <a href="https://help.aliyun.com/zh/model-studio/models">查看模型计费</a>
+        </div>
+      </div>
+      <div class="field">
+        <button class="btn-secondary" id="testAsrConnection" type="button">测试云端连接</button>
+      </div>
       <div class="field">
         <label for="model">识别模型</label>
         <select id="model">
@@ -302,6 +340,8 @@
 
       document.getElementById('shortcutKey').value = config.shortcut?.key || 'RIGHT COMMAND';
       document.getElementById('longPressDuration').value = config.shortcut?.longPressDuration || 500;
+      document.getElementById('asrMode').value = config.asr?.mode || 'cloud';
+      document.getElementById('aliyunApiKey').value = '';
       document.getElementById('model').value = config.whisper?.model || 'base';
       document.getElementById('language').value = config.whisper?.language || 'zh';
       document.getElementById('outputScript').value = config.whisper?.outputScript || 'simplified';
@@ -326,6 +366,8 @@
 
     async function saveConfig() {
       const currentConfig = await ipcRenderer.invoke('get-config');
+      const { apiKey: ignoredApiKey, ...currentCloudConfig } = currentConfig.asr?.cloud || {};
+      const nextApiKey = document.getElementById('aliyunApiKey').value.trim();
 
       const newConfig = {
         ...currentConfig,
@@ -345,6 +387,20 @@
           language: document.getElementById('language').value,
           outputScript: document.getElementById('outputScript').value,
           enablePunctuation: document.getElementById('enablePunctuation').checked,
+        },
+        asr: {
+          ...(currentConfig.asr || {}),
+          mode: document.getElementById('asrMode').value,
+          cloud: {
+            ...currentCloudConfig,
+            provider: 'aliyun-paraformer',
+            model: 'paraformer-realtime-v2',
+            ...(nextApiKey ? { apiKey: nextApiKey } : {})
+          },
+          local: {
+            ...(currentConfig.asr?.local || {}),
+            model: document.getElementById('model').value
+          }
         },
         postProcessing: {
           ...currentConfig.postProcessing,
@@ -374,6 +430,26 @@
       }
     }
 
+    async function testAsrConnection() {
+      const apiKey = document.getElementById('aliyunApiKey').value.trim();
+      const result = await ipcRenderer.invoke('test-asr-connection', {
+        asr: {
+          mode: document.getElementById('asrMode').value,
+          cloud: {
+            provider: 'aliyun-paraformer',
+            model: 'paraformer-realtime-v2',
+            ...(apiKey ? { apiKey } : {})
+          }
+        }
+      });
+
+      if (result.ok) {
+        showStatus('云端连接配置可用', 'success');
+      } else {
+        showStatus('云端连接失败: ' + result.message, 'error');
+      }
+    }
+
     function openVocabFile() {
       ipcRenderer.invoke('open-vocab-editor');
     }
@@ -389,6 +465,7 @@
     }
 
     document.getElementById('permissions-open-onboarding').addEventListener('click', openPermissionOnboarding);
+    document.getElementById('testAsrConnection').addEventListener('click', testAsrConnection);
 
     loadConfig();
   </script>

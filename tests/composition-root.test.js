@@ -865,6 +865,18 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
     postProcessing: {
       enabled: false
     },
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        provider: 'aliyun-paraformer',
+        model: 'paraformer-realtime-v2',
+        apiKey: 'sk-current-key',
+        timeoutMs: 30000
+      },
+      local: {
+        model: 'base'
+      }
+    },
     input: {
       appendSpace: true
     },
@@ -943,6 +955,12 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
       },
       inputSimulator: {
         async typeText() {}
+      },
+      async asrConnectionTester(config) {
+        if (config.asr?.cloud?.apiKey === 'sk-bad-key') {
+          throw new Error('provider rejected sk-bad-key');
+        }
+        return { provider: config.asr?.cloud?.provider };
       }
     },
     prepareTranscriptionService: async () => ({
@@ -977,8 +995,16 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
   assert.equal(rendererConfig.whisper.model, 'base');
   assert.equal(rendererConfig.postProcessing.enabled, false);
   assert.equal('llm' in rendererConfig.whisper, false);
+  assert.equal(rendererConfig.asr.cloud.apiKey, '');
+  assert.equal(typeof handlers['test-asr-connection'], 'function');
 
   await handlers['save-config'](null, {
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        apiKey: 'sk-new-key'
+      }
+    },
     whisper: {
       model: 'small',
       language: 'en',
@@ -993,7 +1019,29 @@ test('composition root sanitizes renderer config reads and preserves inert whisp
   assert.equal(savedConfig.whisper.model, 'small');
   assert.equal(savedConfig.whisper.outputScript, 'original');
   assert.equal(savedConfig.postProcessing.enabled, true);
+  assert.equal(savedConfig.asr.cloud.apiKey, 'sk-new-key');
   assert.deepEqual(savedConfig.whisper.llm, currentConfig.whisper.llm);
+
+  assert.deepEqual(await handlers['test-asr-connection'](null, {
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        apiKey: 'sk-good-key'
+      }
+    }
+  }), { ok: true, provider: 'aliyun-paraformer' });
+
+  const failedConnection = await handlers['test-asr-connection'](null, {
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        apiKey: 'sk-bad-key'
+      }
+    }
+  });
+  assert.equal(failedConnection.ok, false);
+  assert.match(failedConnection.message, /provider rejected/);
+  assert.doesNotMatch(failedConnection.message, /sk-bad-key/);
 });
 
 test('composition root routes shared permission readiness through tray events and ipc handlers', async () => {
@@ -1648,6 +1696,82 @@ test('prepareTranscriptionService returns null when startup model download is de
   });
 
   assert.equal(service, null);
+});
+
+test('prepareTranscriptionService creates Aliyun cloud engine without local model readiness', async () => {
+  const events = [];
+
+  class FakeAliyunEngine {
+    constructor(options) {
+      this.options = options;
+      events.push(`cloud:create:${options.apiKey}:${options.model}`);
+    }
+
+    async transcribe(audioPath) {
+      events.push(`cloud:transcribe:${audioPath}`);
+      return 'raw cloud text';
+    }
+  }
+
+  const service = await prepareTranscriptionService({
+    config: {
+      asr: {
+        mode: 'cloud',
+        cloud: {
+          provider: 'aliyun-paraformer',
+          model: 'paraformer-realtime-v2',
+          apiKey: 'sk-test-key',
+          timeoutMs: 42000
+        }
+      },
+      whisper: {
+        language: 'zh',
+        outputScript: 'simplified'
+      },
+      vocabulary: {
+        enabled: false,
+        path: '/tmp/vocabulary.json'
+      },
+      postProcessing: {
+        enabled: true
+      }
+    },
+    modelDownloader: {
+      async checkModel() {
+        throw new Error('local model readiness should not run for cloud ASR');
+      }
+    },
+    runtimePaths: {
+      sharedModelsDir: '/models',
+      sharedDebugCapturesDir: '/captures',
+      whisperBinPath: '/bin/whisper-cli',
+      getBundledModelPath(modelName) {
+        return `/bundled/${modelName}`;
+      },
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    },
+    AliyunParaformerEngine: FakeAliyunEngine,
+    loadVocabularyData: async () => {
+      events.push('vocabulary:load');
+      return { words: [], replacements: {} };
+    },
+    applyPostProcessing: async (text) => {
+      events.push(`postprocess:${text}`);
+      return 'final cloud text';
+    }
+  });
+
+  assert.ok(service instanceof TranscriptionService);
+  const result = await service.transcribe('/tmp/cloud.wav');
+
+  assert.equal(result, 'final cloud text');
+  assert.deepEqual(events, [
+    'cloud:create:sk-test-key:paraformer-realtime-v2',
+    'cloud:transcribe:/tmp/cloud.wav',
+    'postprocess:raw cloud text'
+  ]);
 });
 
 test('prepareTranscriptionService switches models through downloader-backed readiness checks', async () => {
