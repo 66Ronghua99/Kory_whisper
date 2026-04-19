@@ -107,6 +107,7 @@ class CompositionRoot {
     this.configManager = options.configManager || this.createConfigManager(options);
     this.modelDownloader = options.modelDownloader || null;
     this.services = {};
+    this.activeTranscriptionConfig = null;
   }
 
   createConfigManager(options = {}) {
@@ -190,6 +191,7 @@ class CompositionRoot {
       runtimePaths: this.runtimePaths,
       whisperEngine: this.collaborators.whisperEngine
     });
+    this.activeTranscriptionConfig = config;
 
     this.services = {
       recording: new RecordingService({ audioRecorder }),
@@ -354,7 +356,9 @@ class CompositionRoot {
       config.whisper.model = resolveModelKey(config.whisper.model);
     }
 
-    if (this.services.transcription && typeof this.services.transcription.applyConfig === 'function') {
+    if (this.shouldRebuildTranscriptionService(config)) {
+      await this.rebuildTranscriptionService(config);
+    } else if (this.services.transcription && typeof this.services.transcription.applyConfig === 'function') {
       await this.services.transcription.applyConfig({
         ...config,
         vocabulary: {
@@ -362,6 +366,7 @@ class CompositionRoot {
           path: config.vocabulary?.path || this.configManager.getVocabPath()
         }
       });
+      this.activeTranscriptionConfig = config;
     }
 
     if (this.services.injection) {
@@ -373,6 +378,63 @@ class CompositionRoot {
     if (this.services.cue) {
       this.services.cue.updateOptions(config.audioCues || {});
     }
+  }
+
+  shouldRebuildTranscriptionService(nextConfig = {}) {
+    if (!this.services.transcription || this.collaborators.transcriptionService) {
+      return false;
+    }
+
+    return this.getTranscriptionEngineSignature(this.activeTranscriptionConfig)
+      !== this.getTranscriptionEngineSignature(nextConfig);
+  }
+
+  getTranscriptionEngineSignature(config = {}) {
+    const mode = config?.asr?.mode || 'cloud';
+    if (mode === 'cloud') {
+      return `cloud:${config?.asr?.cloud?.provider || 'aliyun-paraformer'}`;
+    }
+
+    return 'local';
+  }
+
+  async rebuildTranscriptionService(config = {}) {
+    const nextConfig = {
+      ...config,
+      vocabulary: {
+        ...config.vocabulary,
+        path: config.vocabulary?.path || this.configManager.getVocabPath()
+      }
+    };
+    const previousTranscriptionService = this.services.transcription;
+    const nextTranscriptionService = await this.prepareTranscriptionService({
+      config: nextConfig,
+      dialog: this.dialog,
+      BrowserWindow: this.BrowserWindow,
+      logger: this.logger,
+      loadVocabularyData: this.collaborators.loadVocabularyData,
+      modelDownloader: this.modelDownloader,
+      postProcessingPipeline: this.collaborators.postProcessingPipeline,
+      createPostProcessingContext: this.collaborators.createPostProcessingContext,
+      applyPostProcessing: this.collaborators.applyPostProcessing,
+      runtimeEnv: this.runtimeEnv,
+      runtimePaths: this.runtimePaths,
+      whisperEngine: this.collaborators.whisperEngine
+    });
+
+    if (!nextTranscriptionService) {
+      throw new Error('Failed to prepare transcription service for ASR mode change');
+    }
+
+    if (previousTranscriptionService && typeof previousTranscriptionService.dispose === 'function') {
+      await previousTranscriptionService.dispose();
+    }
+
+    this.services.transcription = nextTranscriptionService;
+    if (this.services.dictation) {
+      this.services.dictation.transcriptionService = nextTranscriptionService;
+    }
+    this.activeTranscriptionConfig = nextConfig;
   }
 
   openVocabEditor() {

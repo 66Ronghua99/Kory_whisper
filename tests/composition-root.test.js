@@ -827,6 +827,160 @@ test('composition root wires injected services and drives dictation through shor
   assert.equal(events.includes('whisper:stop-server'), true);
 });
 
+test('composition root rebuilds transcription service when ASR mode changes', async () => {
+  const events = [];
+  const handlers = {};
+  let currentConfig = {
+    shortcut: {
+      key: 'RIGHT COMMAND',
+      longPressDuration: 500
+    },
+    input: {
+      appendSpace: true
+    },
+    audioCues: {
+      enabled: true
+    },
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        provider: 'aliyun-paraformer',
+        apiKey: 'sk-saved-key',
+        model: 'paraformer-realtime-v2'
+      },
+      local: {
+        model: 'medium'
+      }
+    },
+    whisper: {
+      model: 'medium',
+      language: 'zh',
+      prompt: ''
+    },
+    vocabulary: {
+      path: '/tmp/vocabulary.json'
+    }
+  };
+  const preparedServices = [];
+  const trayManager = new EventEmitter();
+  Object.assign(trayManager, {
+    init() {},
+    setPermissionReadiness() {},
+    showPermissionBlocked() {},
+    openPermissionOnboarding() {},
+    showProcessingState() {},
+    showSuccessState() {},
+    showErrorState() {},
+    setRecordingState() {}
+  });
+
+  const root = createCompositionRoot({
+    app: {
+      quit() {}
+    },
+    ipcMain: {
+      handle(channel, handler) {
+        handlers[channel] = handler;
+      }
+    },
+    configManager: {
+      get() {
+        return currentConfig;
+      },
+      async save(config) {
+        currentConfig = config;
+        events.push(`config:save:${config.asr.mode}`);
+      },
+      getVocabPath() {
+        return '/tmp/vocabulary.json';
+      }
+    },
+    collaborators: {
+      shortcutManager: createShortcutManagerSpy(events),
+      trayManager,
+      audioRecorder: {
+        async start() {},
+        async stop() {
+          return '/tmp/capture.wav';
+        }
+      },
+      permissionGateway: {
+        async check() {
+          return {
+            microphoneGranted: true,
+            accessibilityEnabled: true,
+            inputMonitoringStatus: 'granted',
+            surfaces: {
+              microphone: { granted: true },
+              accessibility: { granted: true },
+              inputMonitoring: { status: 'granted' }
+            }
+          };
+        },
+        openSettings() {}
+      },
+      audioCuePlayer: {
+        async playRecordingStart() {},
+        async playOutputReady() {},
+        updateOptions() {}
+      },
+      inputSimulator: {
+        updateOptions() {},
+        async typeText() {}
+      }
+    },
+    prepareTranscriptionService: async ({ config }) => {
+      const service = {
+        mode: config.asr?.mode,
+        async applyConfig(nextConfig) {
+          events.push(`transcription:apply:${nextConfig.asr?.mode}`);
+        },
+        async transcribe() {
+          events.push(`transcription:transcribe:${config.asr?.mode}`);
+          return 'text';
+        },
+        async dispose() {
+          events.push(`transcription:dispose:${config.asr?.mode}`);
+        }
+      };
+      preparedServices.push(service);
+      events.push(`transcription:prepare:${config.asr?.mode}`);
+      return service;
+    },
+    logger: {
+      info() {},
+      warn() {},
+      error() {}
+    },
+    runtimeEnv: {
+      platform: 'darwin'
+    },
+    runtimePaths: {
+      getSharedModelPath(modelName) {
+        return `/models/${modelName}`;
+      }
+    }
+  });
+
+  await root.initialize();
+  assert.equal(root.services.transcription.mode, 'cloud');
+
+  await handlers['save-config'](null, {
+    asr: {
+      mode: 'local'
+    }
+  });
+
+  assert.equal(root.services.transcription.mode, 'local');
+  assert.equal(root.services.dictation.transcriptionService.mode, 'local');
+  assert.equal(preparedServices.length, 2);
+  assert.deepEqual(events.filter((event) => event.startsWith('transcription:')), [
+    'transcription:prepare:cloud',
+    'transcription:prepare:local',
+    'transcription:dispose:cloud'
+  ]);
+});
+
 test('composition root requires injected runtime facts instead of falling back to process.platform', () => {
   assert.throws(
     () => createCompositionRoot({

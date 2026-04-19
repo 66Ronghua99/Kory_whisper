@@ -34,3 +34,4 @@
 - DashScope Paraformer WebSocket `run-task` messages require `payload.input` even when it is empty; omitting it causes provider error `Missing required parameter 'payload.input'`.
 - File logs must serialize `Error.name`, `Error.message`, `Error.code`, and `Error.stack` explicitly; `JSON.stringify(error)` can drop the real failure reason and leave dictation smoke failures as `Processing error: {}`.
 - Saving cloud ASR config must update the active Aliyun engine, not only the persisted config object; otherwise real dictation can keep using the startup engine with an empty API key until app restart.
+- ASR mode/provider changes are engine-signature changes, not ordinary runtime option edits; the composition root must rebuild `TranscriptionService` and rewire `DictationService.transcriptionService` when switching between cloud and local engines.

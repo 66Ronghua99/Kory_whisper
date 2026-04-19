@@ -26,6 +26,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - The macOS permission onboarding loop is now recorded as complete in the repo truth files, with fresh evidence scaffolding under `artifacts/macos-permission-onboarding/`.
 - Whisper prompt construction no longer injects vocabulary words; vocabulary remains a post-processing concern to avoid prompt-echo regressions such as `Keywords Keywords`.
 - Aliyun BYOK cloud ASR is implemented as the new default ASR mode: users provide their own Bailian/DashScope key, Kory Whisper keeps the dictation flow local except for direct Aliyun transcription, and local Whisper remains an explicit offline mode.
+- Runtime config saves now rebuild the transcription service when switching between Aliyun cloud ASR and local Whisper, so dictation uses the newly selected engine instead of a stale startup instance.
 
 ## In Progress
 
@@ -34,7 +35,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 
 ## Pending
 
-- Run a real-key Aliyun BYOK cloud ASR smoke test and capture result evidence under `artifacts/aliyun-byok-cloud-asr/`.
+- Run real-key Aliyun BYOK cloud and local Whisper dictation smokes after relaunching the rebuilt packaged app, then capture result evidence under `artifacts/aliyun-byok-cloud-asr/`.
 - Implement the first Windows-native behavior loop on top of the `win32` profile and adapter paths.
 - Run the macOS interactive smoke matrix on a mac host to refresh tray/permission/path evidence.
 - Run a manual dictation/settings smoke pass for the merged ASR post-processing path on a mac host and capture fresh evidence.

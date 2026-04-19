@@ -50,7 +50,16 @@ Implemented the approved Aliyun BYOK cloud ASR path while preserving the existin
 - Verification after patch: red tests reproduced the stale-key failure, then `node --test tests/post-processing-runtime.test.js` PASS, `node --test tests/aliyun-paraformer-engine.test.js` PASS, `npm run verify` PASS with 153/153 tests, `npm run build` PASS, and packaged source inspection confirmed the hot-update path is present in `dist/mac-arm64/Kory Whisper.app`.
 - Next manual step: relaunch the rebuilt packaged app and run one real dictation smoke. If it still fails, inspect `~/.kory-whisper/app.log`; the expected next failure, if any, should now come from the provider/audio path rather than missing local API key.
 
+## 2026-04-19 ASR Mode Switch Rebuild
+
+- User reported that switching to the local model still showed the tray error state.
+- Local config inspection still showed `asr.mode: cloud` with a stored Aliyun key, so the latest user-visible local switch had not persisted as local at inspection time.
+- Runtime root cause found in code: saving config could update an existing transcription service, but cloud/local mode changes require replacing the underlying engine instance and rewiring the dictation service.
+- Regression: `tests/composition-root.test.js` now asserts saving `asr.mode: local` from a cloud startup rebuilds `TranscriptionService`, disposes the old cloud service, and updates `DictationService.transcriptionService`.
+- Verification after patch: `node --test tests/composition-root.test.js` PASS with 20/20 tests, `npm run verify` PASS with 154/154 tests and coverage gate, `npm run build` PASS, and packaged app inspection confirmed `shouldRebuildTranscriptionService()` and `rebuildTranscriptionService()` are present in `dist/mac-arm64/Kory Whisper.app`.
+- Manual gap: real packaged smoke still needs a rerun after relaunching the newly rebuilt app, testing cloud and local modes separately.
+
 ## Manual Gaps
 
 - Settings real-key connection smoke has succeeded according to user report.
-- Real packaged dictation smoke still needs one rerun after the saved-key runtime hot-update fix.
+- Real packaged dictation smoke still needs one rerun after the ASR mode-switch rebuild fix.
