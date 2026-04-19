@@ -243,6 +243,7 @@ class AliyunParaformerEngine {
         task: 'asr',
         function: 'recognition',
         model: this.model,
+        input: {},
         parameters: {
           format: 'wav',
           sample_rate: 16000,

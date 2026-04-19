@@ -116,6 +116,7 @@ test('AliyunParaformerEngine streams a completed local audio file and returns fi
   assert.equal(runTask.header.action, 'run-task');
   assert.equal(runTask.header.task_id, 'task-123');
   assert.equal(runTask.payload.model, 'paraformer-realtime-v2');
+  assert.deepEqual(runTask.payload.input, {});
   assert.equal(runTask.payload.parameters.format, 'wav');
   assert.deepEqual(runTask.payload.parameters.language_hints, ['zh', 'en']);
 
@@ -141,6 +142,7 @@ test('AliyunParaformerEngine testConnection validates websocket reachability wit
   const runTask = JSON.parse(socket.sent[0]);
   assert.equal(runTask.header.action, 'run-task');
   assert.equal(runTask.header.task_id, 'connection-test');
+  assert.deepEqual(runTask.payload.input, {});
   assert.equal(socket.sent.length, 1);
   assert.equal(socket.closed, true);
 });

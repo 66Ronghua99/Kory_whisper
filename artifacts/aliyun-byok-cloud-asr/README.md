@@ -25,6 +25,13 @@ Implemented the approved Aliyun BYOK cloud ASR path while preserving the existin
 - `npm run test:coverage` -> PASS, Statements 93.27%, Branches 83.33%, Functions 88.76%, Lines 93.27%.
 - `npm run verify` -> PASS for the combined lint/test/coverage gate.
 
+## 2026-04-19 Real-Key Connection Regression
+
+- User-reported settings connection failure: `Aliyun ASR failed: Missing required parameter 'payload.input'. Please follow the protocol!`.
+- Root cause: `run-task` messages omitted the DashScope-required empty `payload.input` object.
+- Regression: `tests/aliyun-paraformer-engine.test.js` now asserts `runTask.payload.input` is `{}` for both transcription and connection-test flows.
+- Verification after patch: `node --test tests/aliyun-paraformer-engine.test.js` PASS, `npm run verify` PASS, `npm run build` PASS, and packaged engine inspection confirmed `payload.input` is `{}`.
+
 ## Manual Gaps
 
 - No real Aliyun API key smoke test was run in this environment.

@@ -31,3 +31,4 @@
 - Input Monitoring must stay unresolved at startup when the platform check is only `unknown`; the first real shortcut event should validate it instead of immediately reopening System Settings.
 - Cloud ASR must not silently fall back to local Whisper on provider failure; that would surprise users with downloads and privacy behavior.
 - Renderer config must never echo stored `asr.cloud.apiKey`; blank API key fields in settings should preserve the already-stored local secret unless the user enters a replacement.
+- DashScope Paraformer WebSocket `run-task` messages require `payload.input` even when it is empty; omitting it causes provider error `Missing required parameter 'payload.input'`.

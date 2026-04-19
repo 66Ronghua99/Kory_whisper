@@ -13,3 +13,10 @@ Append-only project timeline for decisions, attempts, turns, verification notes,
 - Added ASR config defaults, renderer/API-key redaction, settings UI for cloud/local mode, `test-asr-connection` IPC, and `ws` runtime dependency.
 - Updated distribution metadata so Whisper model assets remain known but are no longer included in default `extraResources`.
 - Verification before final commit: `npm test` passed 149/149, `npm run lint` passed with `repo-hardgate: OK`, and `npm run test:coverage` passed with c8 coverage summary.
+
+## 2026-04-19
+
+- Debugged real-key Aliyun settings connection failure: provider returned `Missing required parameter 'payload.input'`.
+- Confirmed root cause in `src/main/asr/aliyun-paraformer-engine.js`: `run-task` messages included `payload.parameters` but omitted required empty `payload.input`.
+- Added regression assertions in `tests/aliyun-paraformer-engine.test.js` and patched `createRunTaskMessage()` to send `input: {}`.
+- Verification after patch: `node --test tests/aliyun-paraformer-engine.test.js`, `npm run verify`, and `npm run build` passed; packaged engine inspection showed `payload.input` is `{}`.
