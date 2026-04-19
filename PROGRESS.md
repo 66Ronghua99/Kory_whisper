@@ -28,6 +28,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - Aliyun BYOK cloud ASR is implemented as the new default ASR mode: users provide their own Bailian/DashScope key, Kory Whisper keeps the dictation flow local except for direct Aliyun transcription, and local Whisper remains an explicit offline mode.
 - Runtime config saves now rebuild the transcription service when switching between Aliyun cloud ASR and local Whisper, so dictation uses the newly selected engine instead of a stale startup instance.
 - Darwin recorder stop now handles immediate `rec` exit after `SIGTERM`, preventing dictation from hanging before local Whisper or cloud ASR starts.
+- Aliyun cloud ASR now streams real audio as 4 KB chunks with a 100 ms interval before `finish-task`, matching the provider WebSocket streaming shape instead of blasting the full wav synchronously.
 
 ## In Progress
 
@@ -36,7 +37,7 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 
 ## Pending
 
-- Run real-key Aliyun BYOK cloud and local Whisper dictation smokes after relaunching the recorder-race rebuilt packaged app, then capture result evidence under `artifacts/aliyun-byok-cloud-asr/`.
+- Run a short real-key Aliyun BYOK cloud dictation smoke after relaunching the chunk-pacing rebuilt packaged app, then capture result evidence under `artifacts/aliyun-byok-cloud-asr/`.
 - Implement the first Windows-native behavior loop on top of the `win32` profile and adapter paths.
 - Run the macOS interactive smoke matrix on a mac host to refresh tray/permission/path evidence.
 - Run a manual dictation/settings smoke pass for the merged ASR post-processing path on a mac host and capture fresh evidence.

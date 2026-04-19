@@ -1,1 +1,1 @@
-Relaunch the rebuilt packaged app with the darwin recorder stop race fix, run separate local and cloud dictation smokes, then inspect `~/.kory-whisper/app.log` and record the result under `artifacts/aliyun-byok-cloud-asr/`.
+Relaunch the rebuilt packaged app with the Aliyun audio chunk pacing fix, run a short cloud dictation smoke, then inspect `~/.kory-whisper/app.log` and record the result under `artifacts/aliyun-byok-cloud-asr/`.

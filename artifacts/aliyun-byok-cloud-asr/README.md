@@ -68,7 +68,16 @@ Implemented the approved Aliyun BYOK cloud ASR path while preserving the existin
 - Verification after patch: red test reproduced the hang, `node --test tests/platform-index.test.js` PASS with 8/8 tests, `npm run verify` PASS with 155/155 tests and coverage gate, `npm run build` PASS, and packaged source inspection confirmed the listener-order fix is present in `dist/mac-arm64/Kory Whisper.app`.
 - Manual gap: relaunch the rebuilt packaged app and rerun local/cloud smokes; if cloud still fails after the recorder fix, the next log should now reach provider-level Aliyun diagnostics rather than stopping at the recording boundary.
 
+## 2026-04-19 Cloud Audio Chunk Pacing
+
+- User clarified that local Whisper is normal and only cloud mode shows the tray error.
+- Current config still has a saved Aliyun key and cloud mode selected, but the latest app log had not advanced after the older 16:13 process; the running packaged process still needed relaunch to test newer builds.
+- Cloud-specific implementation issue found by comparing against Aliyun's Paraformer WebSocket Node.js example and provider data-size guidance: the official flow sends each audio chunk every 100 ms, while Kory Whisper sent 32 KB chunks synchronously and immediately sent `finish-task`.
+- Regression: `tests/aliyun-paraformer-engine.test.js` now asserts `streamAudio()` uses 4 KB provider-sized default chunks and waits 100 ms between chunks before the task is finished.
+- Verification after patch: red tests reproduced missing pacing and oversized default chunk behavior, `node --test tests/aliyun-paraformer-engine.test.js` PASS with 7/7 tests, `npm run verify` PASS with 157/157 tests and coverage gate, `npm run build` PASS, and packaged source inspection confirmed `DEFAULT_CHUNK_BYTES = 4 * 1024`, `chunkIntervalMs`, and the inter-chunk wait are present in `dist/mac-arm64/Kory Whisper.app`.
+- Manual gap: relaunch the rebuilt packaged app, test only cloud mode with a short utterance first, then inspect `~/.kory-whisper/app.log` if the tray still enters error state.
+
 ## Manual Gaps
 
 - Settings real-key connection smoke has succeeded according to user report.
-- Real packaged dictation smoke still needs one rerun after the darwin recorder stop race fix.
+- Real packaged cloud dictation smoke still needs one rerun after the cloud chunk pacing fix.

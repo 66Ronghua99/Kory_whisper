@@ -145,6 +145,60 @@ test('AliyunParaformerEngine streams a completed local audio file and returns fi
   assert.equal(finishTask.header.task_id, 'task-123');
 });
 
+test('AliyunParaformerEngine paces audio chunks before finishing the task', async () => {
+  const sent = [];
+  const waits = [];
+  const engine = new AliyunParaformerEngine({
+    apiKey: 'sk-test-key',
+    WebSocketClass: FakeWebSocket,
+    chunkBytes: 2,
+    chunkIntervalMs: 100,
+    wait: async (durationMs) => {
+      waits.push(durationMs);
+    },
+    fs: {
+      async readFile() {
+        return Buffer.from('abcde');
+      }
+    }
+  });
+
+  await engine.streamAudio({
+    send(payload) {
+      sent.push(Buffer.from(payload).toString('utf8'));
+    }
+  }, '/tmp/sample.wav');
+
+  assert.deepEqual(sent, ['ab', 'cd', 'e']);
+  assert.deepEqual(waits, [100, 100]);
+});
+
+test('AliyunParaformerEngine uses provider-sized default audio chunks', async () => {
+  const sentSizes = [];
+  const waits = [];
+  const engine = new AliyunParaformerEngine({
+    apiKey: 'sk-test-key',
+    WebSocketClass: FakeWebSocket,
+    wait: async (durationMs) => {
+      waits.push(durationMs);
+    },
+    fs: {
+      async readFile() {
+        return Buffer.alloc(9000);
+      }
+    }
+  });
+
+  await engine.streamAudio({
+    send(payload) {
+      sentSizes.push(payload.length);
+    }
+  }, '/tmp/sample.wav');
+
+  assert.deepEqual(sentSizes, [4096, 4096, 808]);
+  assert.deepEqual(waits, [100, 100]);
+});
+
 test('AliyunParaformerEngine testConnection validates websocket reachability without streaming audio', async () => {
   FakeWebSocket.instances = [];
   const engine = new AliyunParaformerEngine({

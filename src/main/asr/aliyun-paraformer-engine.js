@@ -6,7 +6,8 @@ const { createAsrError, redactSecretText } = require('./errors');
 const DEFAULT_ENDPOINT = 'wss://dashscope.aliyuncs.com/api-ws/v1/inference';
 const DEFAULT_MODEL = 'paraformer-realtime-v2';
 const DEFAULT_TIMEOUT_MS = 30000;
-const DEFAULT_CHUNK_BYTES = 32 * 1024;
+const DEFAULT_CHUNK_BYTES = 4 * 1024;
+const DEFAULT_CHUNK_INTERVAL_MS = 100;
 
 function getDefaultWebSocketClass() {
   try {
@@ -56,9 +57,11 @@ class AliyunParaformerEngine {
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.languageHints = options.languageHints || ['zh', 'en'];
     this.chunkBytes = options.chunkBytes || DEFAULT_CHUNK_BYTES;
+    this.chunkIntervalMs = options.chunkIntervalMs ?? DEFAULT_CHUNK_INTERVAL_MS;
     this.WebSocketClass = options.WebSocketClass || getDefaultWebSocketClass();
     this.taskIdFactory = options.taskIdFactory || (() => crypto.randomUUID());
     this.fs = options.fs || fs;
+    this.wait = options.wait || ((durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs)));
   }
 
   updateRuntimeOptions(options = {}) {
@@ -285,6 +288,9 @@ class AliyunParaformerEngine {
     const audio = await this.fs.readFile(audioPath);
     for (let offset = 0; offset < audio.length; offset += this.chunkBytes) {
       socket.send(audio.subarray(offset, offset + this.chunkBytes));
+      if (offset + this.chunkBytes < audio.length && this.chunkIntervalMs > 0) {
+        await this.wait(this.chunkIntervalMs);
+      }
     }
   }
 
