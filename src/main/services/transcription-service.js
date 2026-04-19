@@ -90,10 +90,15 @@ class TranscriptionService {
       modelPath = nextModelPath;
     }
 
+    const cloudConfig = config.asr?.cloud || {};
     this.updateRuntimeOptions({
       modelPath,
       language: config.whisper?.language || this.whisperEngine.language,
-      prompt: config.whisper?.prompt || ''
+      prompt: config.whisper?.prompt || '',
+      apiKey: cloudConfig.apiKey,
+      model: cloudConfig.model,
+      timeoutMs: cloudConfig.timeoutMs,
+      languageHints: cloudConfig.languageHints
     });
 
     this.defaultVocabPath = config.vocabulary?.path || this.defaultVocabPath;

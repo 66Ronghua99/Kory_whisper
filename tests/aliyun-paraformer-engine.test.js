@@ -95,6 +95,25 @@ test('AliyunParaformerEngine rejects missing API keys before opening a websocket
   assert.equal(FakeWebSocket.instances.length, 0);
 });
 
+test('AliyunParaformerEngine updates the API key used by later transcriptions', async () => {
+  FakeWebSocket.instances = [];
+  const engine = new AliyunParaformerEngine({
+    apiKey: '',
+    WebSocketClass: FakeWebSocket,
+    taskIdFactory: () => 'task-updated-key'
+  });
+
+  engine.updateRuntimeOptions({
+    apiKey: 'sk-updated-key'
+  });
+
+  const text = await withAudioFile((audioPath) => engine.transcribe(audioPath));
+
+  assert.equal(text, '你好 world');
+  assert.equal(FakeWebSocket.instances.length, 1);
+  assert.equal(FakeWebSocket.instances[0].options.headers.Authorization, 'Bearer sk-updated-key');
+});
+
 test('AliyunParaformerEngine streams a completed local audio file and returns final transcript text', async () => {
   FakeWebSocket.instances = [];
   const engine = new AliyunParaformerEngine({

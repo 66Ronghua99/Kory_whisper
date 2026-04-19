@@ -61,6 +61,21 @@ class AliyunParaformerEngine {
     this.fs = options.fs || fs;
   }
 
+  updateRuntimeOptions(options = {}) {
+    if (Object.prototype.hasOwnProperty.call(options, 'apiKey')) {
+      this.apiKey = options.apiKey || '';
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'model')) {
+      this.model = options.model || DEFAULT_MODEL;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'timeoutMs')) {
+      this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+    }
+    if (Object.prototype.hasOwnProperty.call(options, 'languageHints')) {
+      this.languageHints = Array.isArray(options.languageHints) ? options.languageHints : ['zh', 'en'];
+    }
+  }
+
   async transcribe(audioPath) {
     const apiKey = this.apiKey.trim();
     if (!apiKey) {

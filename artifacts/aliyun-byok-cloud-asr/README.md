@@ -41,7 +41,16 @@ Implemented the approved Aliyun BYOK cloud ASR path while preserving the existin
 - Verification after patch: `node --test tests/logger.test.js` PASS, `node --test tests/aliyun-paraformer-engine.test.js` PASS, `npm run verify` PASS, `npm run build` PASS, and packaged logger inspection confirmed the fix is present in `dist/mac-arm64/Kory Whisper.app`.
 - Next manual step: relaunch the rebuilt packaged app, run one real dictation smoke, then inspect `~/.kory-whisper/app.log` for the concrete Aliyun/audio failure message.
 
+## 2026-04-19 Saved-Key Runtime Hot Update
+
+- User-reported real dictation still failed after saving the Aliyun key.
+- Local app log showed the active runtime still threw `Aliyun API key is required for cloud ASR`, while `~/.kory-whisper/config.json` contained a saved `asr.cloud.apiKey`.
+- Root cause: saving settings updated persisted config and `TranscriptionService.config`, but the existing `AliyunParaformerEngine` instance kept the startup API key value.
+- Regression: `tests/post-processing-runtime.test.js` now asserts cloud ASR config updates are forwarded to the active engine, and `tests/aliyun-paraformer-engine.test.js` now asserts later transcriptions use an updated API key.
+- Verification after patch: red tests reproduced the stale-key failure, then `node --test tests/post-processing-runtime.test.js` PASS, `node --test tests/aliyun-paraformer-engine.test.js` PASS, `npm run verify` PASS with 153/153 tests, `npm run build` PASS, and packaged source inspection confirmed the hot-update path is present in `dist/mac-arm64/Kory Whisper.app`.
+- Next manual step: relaunch the rebuilt packaged app and run one real dictation smoke. If it still fails, inspect `~/.kory-whisper/app.log`; the expected next failure, if any, should now come from the provider/audio path rather than missing local API key.
+
 ## Manual Gaps
 
 - Settings real-key connection smoke has succeeded according to user report.
-- Real packaged dictation smoke still needs one rerun after the logger observability fix to capture the concrete cloud ASR failure.
+- Real packaged dictation smoke still needs one rerun after the saved-key runtime hot-update fix.

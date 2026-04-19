@@ -181,3 +181,62 @@ test('transcription service loads vocabulary once and keeps vocabulary usage in 
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test('transcription service forwards cloud ASR config updates to the active engine', async () => {
+  const runtimeUpdates = [];
+  const whisperEngine = {
+    modelPath: undefined,
+    async transcribe() {
+      return 'raw cloud text';
+    },
+    updateRuntimeOptions(options) {
+      runtimeUpdates.push(options);
+    }
+  };
+
+  const service = new TranscriptionService({
+    whisperEngine,
+    config: {
+      asr: {
+        mode: 'cloud',
+        cloud: {
+          apiKey: '',
+          model: 'paraformer-realtime-v2',
+          timeoutMs: 30000
+        }
+      },
+      whisper: {
+        language: 'zh',
+        prompt: ''
+      },
+      vocabulary: {
+        enabled: false
+      }
+    }
+  });
+
+  await service.applyConfig({
+    asr: {
+      mode: 'cloud',
+      cloud: {
+        apiKey: 'sk-saved-key',
+        model: 'paraformer-realtime-v2',
+        timeoutMs: 42000,
+        languageHints: ['zh', 'en']
+      }
+    },
+    whisper: {
+      language: 'zh',
+      prompt: ''
+    },
+    vocabulary: {
+      enabled: false
+    }
+  });
+
+  assert.equal(runtimeUpdates.length, 1);
+  assert.equal(runtimeUpdates[0].apiKey, 'sk-saved-key');
+  assert.equal(runtimeUpdates[0].model, 'paraformer-realtime-v2');
+  assert.equal(runtimeUpdates[0].timeoutMs, 42000);
+  assert.deepEqual(runtimeUpdates[0].languageHints, ['zh', 'en']);
+});

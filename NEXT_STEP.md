@@ -1,1 +1,1 @@
-Relaunch the rebuilt packaged app, run one real-key Aliyun BYOK dictation smoke, then inspect `~/.kory-whisper/app.log` for the concrete cloud ASR failure message and record the result under `artifacts/aliyun-byok-cloud-asr/`.
+Relaunch the rebuilt packaged app with the saved-key hot-update fix, run one real-key Aliyun BYOK dictation smoke, then inspect `~/.kory-whisper/app.log` and record the result under `artifacts/aliyun-byok-cloud-asr/`.
