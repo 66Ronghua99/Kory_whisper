@@ -143,3 +143,28 @@ test('win32 audio recorder stop resolves even when stdin is unavailable', async 
 
   fs.unlinkSync(outputPath);
 });
+
+test('darwin audio recorder stop resolves when rec exits immediately after SIGTERM', async () => {
+  const recorder = new DarwinAudioRecorder();
+  const outputPath = path.join(os.tmpdir(), `kory-whisper-darwin-stop-${process.pid}-${Date.now()}.wav`);
+  fs.writeFileSync(outputPath, 'wav');
+
+  const fakeProcess = new EventEmitter();
+  fakeProcess.killed = false;
+  fakeProcess.kill = () => {
+    fakeProcess.killed = true;
+    fakeProcess.emit('close', 0);
+  };
+
+  recorder.outputPath = outputPath;
+  recorder.soxProcess = fakeProcess;
+
+  const resolvedPath = await Promise.race([
+    recorder.stop(),
+    new Promise((resolve) => setTimeout(() => resolve('timed-out'), 25))
+  ]);
+
+  assert.equal(resolvedPath, outputPath);
+
+  fs.unlinkSync(outputPath);
+});

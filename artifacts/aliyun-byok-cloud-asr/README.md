@@ -59,7 +59,16 @@ Implemented the approved Aliyun BYOK cloud ASR path while preserving the existin
 - Verification after patch: `node --test tests/composition-root.test.js` PASS with 20/20 tests, `npm run verify` PASS with 154/154 tests and coverage gate, `npm run build` PASS, and packaged app inspection confirmed `shouldRebuildTranscriptionService()` and `rebuildTranscriptionService()` are present in `dist/mac-arm64/Kory Whisper.app`.
 - Manual gap: real packaged smoke still needs a rerun after relaunching the newly rebuilt app, testing cloud and local modes separately.
 
+## 2026-04-19 Darwin Recorder Stop Race
+
+- User reported both local and cloud dictation still showed failure after the ASR mode-switch rebuild.
+- Latest app log showed recent `Long press ended - processing...` entries with no corresponding processing error, and recent wav/debug-capture evidence showed local/cloud shared the same recording-stop boundary before diverging.
+- Root cause: darwin `AudioRecorder.stop()` sent `SIGTERM` to `rec` before registering the `close` listener; if `rec` exited immediately, the promise could hang and neither local Whisper nor cloud ASR would start.
+- Regression: `tests/platform-index.test.js` now simulates `rec` emitting `close` synchronously from `kill()` and asserts `stop()` still resolves with the wav path.
+- Verification after patch: red test reproduced the hang, `node --test tests/platform-index.test.js` PASS with 8/8 tests, `npm run verify` PASS with 155/155 tests and coverage gate, `npm run build` PASS, and packaged source inspection confirmed the listener-order fix is present in `dist/mac-arm64/Kory Whisper.app`.
+- Manual gap: relaunch the rebuilt packaged app and rerun local/cloud smokes; if cloud still fails after the recorder fix, the next log should now reach provider-level Aliyun diagnostics rather than stopping at the recording boundary.
+
 ## Manual Gaps
 
 - Settings real-key connection smoke has succeeded according to user report.
-- Real packaged dictation smoke still needs one rerun after the ASR mode-switch rebuild fix.
+- Real packaged dictation smoke still needs one rerun after the darwin recorder stop race fix.

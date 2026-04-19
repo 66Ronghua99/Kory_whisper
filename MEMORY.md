@@ -35,3 +35,4 @@
 - File logs must serialize `Error.name`, `Error.message`, `Error.code`, and `Error.stack` explicitly; `JSON.stringify(error)` can drop the real failure reason and leave dictation smoke failures as `Processing error: {}`.
 - Saving cloud ASR config must update the active Aliyun engine, not only the persisted config object; otherwise real dictation can keep using the startup engine with an empty API key until app restart.
 - ASR mode/provider changes are engine-signature changes, not ordinary runtime option edits; the composition root must rebuild `TranscriptionService` and rewire `DictationService.transcriptionService` when switching between cloud and local engines.
+- macOS `rec` can exit immediately after `SIGTERM`; register the recorder `close` listener before sending the signal, otherwise `stop()` can miss the event and hang before either local Whisper or cloud ASR starts.

@@ -153,24 +153,45 @@ class AudioRecorderDarwin {
       }
 
       const soxProcess = this.soxProcess;
+      const outputPath = this.outputPath;
       this.soxProcess = null;
+      let settled = false;
+      let forceKillTimer = null;
 
-      soxProcess.kill('SIGTERM');
-
-      soxProcess.on('close', () => {
-        if (fs.existsSync(this.outputPath)) {
-          resolve(this.outputPath);
+      const finish = (error, resolvedPath) => {
+        if (settled) {
           return;
         }
 
-        reject(new Error('Output file not created'));
+        settled = true;
+        if (forceKillTimer) {
+          clearTimeout(forceKillTimer);
+        }
+
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve(resolvedPath);
+      };
+
+      soxProcess.on('close', () => {
+        if (fs.existsSync(outputPath)) {
+          finish(null, outputPath);
+          return;
+        }
+
+        finish(new Error('Output file not created'));
       });
 
-      setTimeout(() => {
-        if (!soxProcess.killed) {
+      soxProcess.kill('SIGTERM');
+
+      if (!settled) {
+        forceKillTimer = setTimeout(() => {
           soxProcess.kill('SIGKILL');
-        }
-      }, 2000);
+        }, 2000);
+      }
     });
   }
 }
