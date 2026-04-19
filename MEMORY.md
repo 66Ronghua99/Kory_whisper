@@ -32,3 +32,4 @@
 - Cloud ASR must not silently fall back to local Whisper on provider failure; that would surprise users with downloads and privacy behavior.
 - Renderer config must never echo stored `asr.cloud.apiKey`; blank API key fields in settings should preserve the already-stored local secret unless the user enters a replacement.
 - DashScope Paraformer WebSocket `run-task` messages require `payload.input` even when it is empty; omitting it causes provider error `Missing required parameter 'payload.input'`.
+- File logs must serialize `Error.name`, `Error.message`, `Error.code`, and `Error.stack` explicitly; `JSON.stringify(error)` can drop the real failure reason and leave dictation smoke failures as `Processing error: {}`.

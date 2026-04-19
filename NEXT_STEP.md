@@ -1,1 +1,1 @@
-Run a real-key Aliyun BYOK cloud ASR smoke test from the settings flow and dictation flow, then record the result under `artifacts/aliyun-byok-cloud-asr/`.
+Relaunch the rebuilt packaged app, run one real-key Aliyun BYOK dictation smoke, then inspect `~/.kory-whisper/app.log` for the concrete cloud ASR failure message and record the result under `artifacts/aliyun-byok-cloud-asr/`.

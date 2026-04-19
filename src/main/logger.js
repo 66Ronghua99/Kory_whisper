@@ -10,6 +10,37 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
+function formatLogArg(arg) {
+  if (arg instanceof Error) {
+    const details = {
+      name: arg.name,
+      message: arg.message
+    };
+
+    if (arg.code) {
+      details.code = arg.code;
+    }
+
+    if (arg.stack) {
+      details.stack = arg.stack;
+    }
+
+    for (const [key, value] of Object.entries(arg)) {
+      if (!(key in details)) {
+        details[key] = value;
+      }
+    }
+
+    return JSON.stringify(details);
+  }
+
+  if (arg && typeof arg === 'object') {
+    return JSON.stringify(arg);
+  }
+
+  return String(arg);
+}
+
 class Logger {
   constructor() {
     this.logDir = path.join(os.homedir(), '.kory-whisper');
@@ -34,9 +65,7 @@ class Logger {
 
     // 写入文件
     try {
-      const extra = args.length > 0 ? ' ' + args.map(a =>
-        typeof a === 'object' ? JSON.stringify(a) : String(a)
-      ).join(' ') : '';
+      const extra = args.length > 0 ? ' ' + args.map(formatLogArg).join(' ') : '';
 
       await fs.appendFile(this.logFile, logEntry + extra + '\n', 'utf-8');
     } catch (error) {
@@ -75,4 +104,7 @@ class Logger {
   }
 }
 
-module.exports = new Logger();
+const logger = new Logger();
+
+module.exports = logger;
+module.exports.formatLogArg = formatLogArg;

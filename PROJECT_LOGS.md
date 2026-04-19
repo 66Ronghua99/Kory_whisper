@@ -20,3 +20,6 @@ Append-only project timeline for decisions, attempts, turns, verification notes,
 - Confirmed root cause in `src/main/asr/aliyun-paraformer-engine.js`: `run-task` messages included `payload.parameters` but omitted required empty `payload.input`.
 - Added regression assertions in `tests/aliyun-paraformer-engine.test.js` and patched `createRunTaskMessage()` to send `input: {}`.
 - Verification after patch: `node --test tests/aliyun-paraformer-engine.test.js`, `npm run verify`, and `npm run build` passed; packaged engine inspection showed `payload.input` is `{}`.
+- Investigated real dictation smoke failure after settings connection succeeded: app log showed two recent `[Main] Processing error: {}` entries after recording stopped, confirming a real processing failure but with the `Error.message` lost.
+- Added `tests/logger.test.js` regression coverage and updated `src/main/logger.js` to serialize `Error.name`, `Error.message`, `Error.code`, `Error.stack`, and custom fields explicitly.
+- Verification after logger observability patch: `node --test tests/logger.test.js`, `node --test tests/aliyun-paraformer-engine.test.js`, `npm run verify`, and `npm run build` passed; packaged logger inspection confirmed the fix is present under `dist/mac-arm64/Kory Whisper.app`.
