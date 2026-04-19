@@ -6,6 +6,9 @@
   "scripts": {
     "start": "electron .",
     "dev": "NODE_ENV=development electron .",
+    "smoke:windows": "electron . --smoke-windows",
+    "build:win:dir": "electron-builder --config electron-builder.config.js --win --dir",
+    "build:win:release": "electron-builder --config electron-builder.config.js --win nsis --publish never",
     "test": "node --test tests/*.test.js",
     "test:coverage": "c8 node --test tests/*.test.js",
     "lint": "node scripts/repo-hardgate.js",

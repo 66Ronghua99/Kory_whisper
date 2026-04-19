@@ -1,20 +1,48 @@
 class AudioCuePlayerWin32 {
   constructor(options = {}) {
+    this.runCommand = options.runCommand || this.execCommand;
     this.updateOptions(options);
   }
 
   updateOptions(options = {}) {
     this.enabled = options.enabled !== false;
-    this.recordingStartSound = options.recordingStartSound || 'Tink';
-    this.outputReadySound = options.outputReadySound || 'Glass';
+    this.recordingStartSound = 'Asterisk';
+    this.outputReadySound = 'Exclamation';
   }
 
   async playRecordingStart() {
-    return undefined;
+    await this.playSystemCue('recording-start', this.recordingStartSound);
   }
 
   async playOutputReady() {
-    return undefined;
+    await this.playSystemCue('output-ready', this.outputReadySound);
+  }
+
+  async playSystemCue(cueName, soundName) {
+    if (!this.enabled) {
+      return;
+    }
+
+    try {
+      await this.runCommand(`[System.Media.SystemSounds]::${soundName}.Play()`);
+    } catch (error) {
+      console.error('[AudioCue] Failed to play cue:', cueName, error);
+    }
+  }
+
+  execCommand(command) {
+    const { exec } = require('child_process');
+
+    return new Promise((resolve, reject) => {
+      exec(`powershell.exe -NoProfile -NonInteractive -Command "${command}"`, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
   }
 }
 

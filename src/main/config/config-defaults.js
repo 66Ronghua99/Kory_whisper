@@ -3,6 +3,7 @@ const os = require('os');
 const {
   getSharedAppDir,
   getSharedModelPath,
+  getSharedModelsDir,
   joinPathSegments
 } = require('../shared/model-paths');
 
@@ -22,13 +23,14 @@ function createConfigDefaults(options = {}) {
       device: 'default'
     },
     audioCues: {
-      enabled: true,
-      recordingStartSound: 'Tink',
-      outputReadySound: 'Glass'
+      enabled: false,
+      recordingStartSound: null,
+      outputReadySound: null
     },
     whisper: {
       model: 'base',
       modelPath: getSharedModelPath('ggml-base.bin', { homeDir }),
+      modelStorageHint: `Speech models live in the shared model store at ${getSharedModelsDir({ homeDir })}. Repository-local models/ is not the runtime source of truth.`,
       language: 'zh',
       prompt: '',
       outputScript: 'simplified',

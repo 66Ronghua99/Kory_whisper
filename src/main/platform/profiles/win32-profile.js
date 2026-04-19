@@ -1,10 +1,15 @@
+const SHORTCUT_OPTIONS = Object.freeze([
+  Object.freeze({ key: 'RIGHT CONTROL', label: 'Right Control' }),
+  Object.freeze({ key: 'LEFT CONTROL', label: 'Left Control' }),
+  Object.freeze({ key: 'F13', label: 'F13' }),
+  Object.freeze({ key: 'F14', label: 'F14' }),
+  Object.freeze({ key: 'F15', label: 'F15' })
+]);
+
 module.exports = Object.freeze({
   id: 'win32',
   displayName: 'Windows',
   configDefaults: Object.freeze({
-    shortcut: Object.freeze({
-      key: 'RIGHT CONTROL'
-    }),
     input: Object.freeze({
       method: 'clipboard'
     })
@@ -19,10 +24,10 @@ module.exports = Object.freeze({
       modes: Object.freeze(['clipboard', 'powershell-sendkeys'])
     }),
     audioCues: Object.freeze({
-      supported: false,
-      implementation: 'noop',
-      defaultRecordingStartSound: 'Tink',
-      defaultOutputReadySound: 'Glass'
+      supported: true,
+      implementation: 'win32-system-sounds',
+      defaultRecordingStartSound: 'Asterisk',
+      defaultOutputReadySound: 'Exclamation'
     }),
     permissions: Object.freeze({
       supported: false,
@@ -30,6 +35,20 @@ module.exports = Object.freeze({
     })
   }),
   uiContract: Object.freeze({
+    shortcut: Object.freeze({
+      defaultKey: 'RIGHT CONTROL',
+      options: SHORTCUT_OPTIONS
+    }),
+    audioCues: Object.freeze({
+      supported: true,
+      supportedSoundNames: Object.freeze([]),
+      defaultRecordingStartSound: 'Asterisk',
+      defaultOutputReadySound: 'Exclamation',
+      availabilityNote: 'Windows uses fixed native system sounds, so the cue picker stays hidden.'
+    }),
+    settings: Object.freeze({
+      modelStorageHint: 'Speech models live in the shared user store under ~/.kory-whisper/models/.'
+    }),
     permission: Object.freeze({
       surfaces: Object.freeze([]),
       surfaceOrder: Object.freeze([]),

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const PermissionService = require('../src/main/services/permission-service.js');
 const PermissionGatewayDarwin = require('../src/main/platform/adapters/darwin/permission-gateway.js');
+const PermissionGatewayWin32 = require('../src/main/platform/adapters/win32/permission-gateway.js');
 
 test('darwin permission gateway routes input monitoring to Privacy_ListenEvent', () => {
   const openSystemPreferencesCalls = [];
@@ -219,10 +220,10 @@ test('permission service applies platform contract metadata while building readi
         surfaces: [
           {
             key: 'microphone',
-            label: '麦克风',
-            onboardingLabel: '麦克风',
-            menuLabel: '麦克风',
-            actionLabel: '打开麦克风设置'
+            label: 'Microphone',
+            onboardingLabel: 'Microphone',
+            menuLabel: 'Microphone',
+            actionLabel: 'Open microphone settings'
           }
         ],
         surfaceOrder: ['microphone']
@@ -237,4 +238,67 @@ test('permission service applies platform contract metadata while building readi
   assert.equal(snapshot.surfaces.microphone.status, 'missing');
   assert.equal(snapshot.surfaces.microphone.settingsTarget, 'microphone');
   assert.equal(snapshot.surfaces.accessibility.status, 'granted');
+});
+
+test('win32 permission gateway reports microphone guidance surfaces when access is blocked', async () => {
+  const openExternalCalls = [];
+  const permissionGateway = new PermissionGatewayWin32({
+    shell: {
+      openExternal(uri) {
+        openExternalCalls.push(uri);
+      }
+    },
+    systemPreferences: {
+      getMediaAccessStatus() {
+        return 'denied';
+      }
+    }
+  });
+
+  const state = await permissionGateway.check();
+
+  assert.equal(state.microphoneGranted, false);
+  assert.deepEqual(permissionGateway.getGuidanceSurfaces(state), ['microphone']);
+  assert.deepEqual(permissionGateway.getMicrophoneGuidance(state), {
+    surface: 'microphone',
+    title: 'Enable microphone access',
+    detail: 'Open Windows microphone privacy settings.',
+    settingsUri: 'ms-settings:privacy-microphone'
+  });
+  assert.equal(permissionGateway.openSettings('microphone'), 'ms-settings:privacy-microphone');
+  assert.deepEqual(openExternalCalls, ['ms-settings:privacy-microphone']);
+});
+
+test('win32 permission service treats an empty platform permission contract as ready', async () => {
+  const showMessageBoxCalls = [];
+  const permissionService = new PermissionService({
+    permissionGateway: {
+      ensure: async () => ({
+        microphoneGranted: true,
+        accessibilityEnabled: true
+      }),
+      check: async () => ({
+        microphoneGranted: true,
+        accessibilityEnabled: true
+      })
+    },
+    permissionContract: {
+      permission: {
+        surfaces: [],
+        surfaceOrder: []
+      }
+    },
+    dialog: {
+      async showMessageBox(options) {
+        showMessageBoxCalls.push(options);
+        return { response: 0 };
+      }
+    }
+  });
+
+  const state = await permissionService.ensureStartupPermissions();
+
+  assert.equal(state.isReady, true);
+  assert.deepEqual(state.surfaceOrder, []);
+  assert.deepEqual(showMessageBoxCalls, []);
 });

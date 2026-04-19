@@ -20,7 +20,9 @@ Protect the end-to-end dictation path and the repository's architectural boundar
   - `src/main/index.js` does not reach platform leaf adapters directly
   - `src/main/platform/index.js` is the only production adapter selector
   - `src/renderer/` does not shell out to child processes, global keyboard hooks, or bundled runtime binaries
+  - renderer and service files do not own platform-specific shortcut/audio option tables outside `src/main/platform/profiles/*.js`
 - Coverage ratchet currently applies only to the guarded slice listed in `.c8rc.json`
+- The guarded slice now includes `scripts/repo-hardgate.js` so the repository hardgate itself is part of the measured proof
 - Whole-repo coverage is intentionally deferred until more main-process seams become testable
 
 ## Manual Mac Validation Matrix

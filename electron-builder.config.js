@@ -14,6 +14,7 @@ module.exports = {
   asar: false,
   mac: {
     category: 'public.app-category.productivity',
+    icon: 'build/icon.png',
     target: [
       {
         target: 'dmg',
@@ -29,6 +30,8 @@ module.exports = {
     extraResources: listElectronBuilderExtraResources('darwin')
   },
   win: {
+    icon: 'build/icon.png',
+    signAndEditExecutable: false,
     extraResources: listElectronBuilderExtraResources('win32')
   }
 };

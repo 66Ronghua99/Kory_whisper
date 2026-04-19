@@ -19,6 +19,7 @@ class TrayManager extends EventEmitter {
     this.currentState = 'idle'; // idle, recording, processing, success, error
     this.permissionReadiness = null;
     this.permissionContract = null;
+    this.platformUiContract = null;
     this.resetTimer = null;
   }
 
@@ -93,6 +94,7 @@ class TrayManager extends EventEmitter {
     this.permissionReadiness = readiness || null;
     if (permissionContract && typeof permissionContract === 'object') {
       this.permissionContract = permissionContract;
+      this.platformUiContract = permissionContract;
     }
     this.applyStateVisuals();
     this.updateContextMenu();
@@ -153,7 +155,7 @@ class TrayManager extends EventEmitter {
   }
 
   getPermissionContractSurfaces() {
-    const contract = this.permissionContract || {};
+    const contract = this.permissionContract || this.platformUiContract || {};
     const menuContract = contract.permission || {};
     if (Array.isArray(menuContract.surfaces)) {
       return menuContract.surfaces;
@@ -163,7 +165,7 @@ class TrayManager extends EventEmitter {
   }
 
   getPermissionContractOrder() {
-    const contract = this.permissionContract || {};
+    const contract = this.permissionContract || this.platformUiContract || {};
     const menuContract = contract.permission || {};
     if (Array.isArray(menuContract.surfaceOrder) && menuContract.surfaceOrder.length > 0) {
       return menuContract.surfaceOrder;
@@ -177,7 +179,7 @@ class TrayManager extends EventEmitter {
   }
 
   getPermissionMenuContract() {
-    const contract = this.permissionContract || {};
+    const contract = this.permissionContract || this.platformUiContract || {};
     return contract.permission || {};
   }
 

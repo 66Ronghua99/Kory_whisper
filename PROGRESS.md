@@ -29,16 +29,32 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - Runtime config saves now rebuild the transcription service when switching between Aliyun cloud ASR and local Whisper, so dictation uses the newly selected engine instead of a stale startup instance.
 - Darwin recorder stop now handles immediate `rec` exit after `SIGTERM`, preventing dictation from hanging before local Whisper or cloud ASR starts.
 - Aliyun cloud ASR now streams real audio as 4 KB chunks with a 100 ms interval before `finish-task`, matching the provider WebSocket streaming shape instead of blasting the full wav synchronously.
+- The dedicated Windows smoke entrypoint is now a command-line path with explicit usage help and RIGHT CONTROL orchestration.
+- The repository now contains the official Windows `whisper-cli.exe` bundle plus required `ggml`/`whisper` DLL companions under `bin/`.
+- The Windows smoke command now routes through the Electron app entrypoint via `electron . --smoke-windows`, and `npm run smoke:windows -- --help` exits cleanly instead of hanging on `electron <script>` startup.
+- Windows packaging now has a dedicated `npm run build:win:dir` path, and `electron-builder` no longer blocks that unpacked build on `winCodeSign` executable-editing prerequisites.
+- Fresh Windows unpacked builds now emit `dist/win-unpacked/Kory Whisper.exe`, and the packaged executable can start and render the smoke help text through `--smoke-windows --help`.
+- The Windows platform UI contract loop is now merged: settings and tray consume injected platform UI contract data instead of keeping macOS-only shortcut/audio assumptions in the renderer.
+- Windows cue playback now uses fixed native system sounds (`Asterisk` for recording start, `Exclamation` for output ready), and the Windows settings surface keeps only the cue enable toggle instead of exposing fake macOS-style sound choices.
+- The repo hardgate now blocks renderer/service ownership of platform-specific shortcut/audio option tables without any remaining `settings.html` exception.
+- Fresh verification for the Windows platform UI contract loop now includes `npm run lint`, `npm test`, and `npm run test:coverage`, and the new guarded config/hardgate files for this loop hold `100%` line and branch coverage.
+- The full repository test suite is green again after aligning the composition-root progress expectation with the current object-shaped model download progress payload.
+- Electron Builder now sources app icons from tracked `build/icon.png`, with mac entitlements checked in under `build/entitlements.mac.plist` instead of relying on local-only build resources.
+- A dedicated GitHub Actions Windows release workflow now exists at `.github/workflows/release-windows.yml`, builds an NSIS installer through `npm run build:win:release`, and targets `dist/*.exe` release uploads.
+- The local Aliyun BYOK cloud ASR line and remote Windows runtime/release line have been reconciled into one merge scope, preserving WebSocket ASR, Windows smoke/runtime support, profile-driven settings, and release workflow assets.
 
 ## In Progress
 
-- Preparing the first Windows-native implementation loop behind the frozen runtime/profile seams.
 - macOS permission onboarding verification is complete at the repo-doc level; manual macOS evidence still needs a real host capture.
+- Real Windows host validation is still pending for the newly contract-driven settings/tray surfaces, native Windows cue playback, and the unpacked app's normal-mode loop.
 
 ## Pending
 
+- Push the unified merge commit to `origin/master`.
 - Run a short real-key Aliyun BYOK cloud dictation smoke after relaunching the chunk-pacing rebuilt packaged app, then capture result evidence under `artifacts/aliyun-byok-cloud-asr/`.
-- Implement the first Windows-native behavior loop on top of the `win32` profile and adapter paths.
+- Run the dedicated Windows smoke command on a real Windows host and refresh evidence with the first end-to-end host run.
+- Launch the unpacked Windows app build in normal mode on a real Windows host and prove the regular app path can complete the dictation loop instead of only the smoke CLI path.
+- Validate the contract-driven Windows settings page, tray surfaces, and fixed native cue playback on a real Windows host now that macOS-specific renderer assumptions are removed.
 - Run the macOS interactive smoke matrix on a mac host to refresh tray/permission/path evidence.
 - Run a manual dictation/settings smoke pass for the merged ASR post-processing path on a mac host and capture fresh evidence.
 
@@ -52,8 +68,16 @@ M1: Freeze the Windows runtime decoupling boundary proof and start the first Win
 - `src/main/config/config-manager.js` and `src/main/shared/model-paths.js` are the canonical config/path entrypoints.
 - `src/main/post-processing/` now owns ASR cleanup stages, while `src/main/services/transcription-service.js` owns vocabulary loading and pipeline invocation.
 - `src/main/asr/` owns cloud ASR provider adapters and secret redaction helpers.
+- `src/main/cli/windows-smoke.js` owns the dedicated Windows smoke command and long-press proof loop.
+- `electron-builder.config.js` now keeps a Windows unpacked build path viable by disabling executable edit/sign work for the local `dir` build flow.
+- `electron-builder.config.js` now also points macOS and Windows app-icon slots at the tracked `build/icon.png` resource, while the runtime tray icon remains under `assets/iconTemplate.png`.
+- `src/main/platform/profiles/*.js` now own renderer/tray-facing shortcut and audio-cue UI contract data, and `src/renderer/settings.html` renders only from injected contract payloads.
+- `src/main/platform/adapters/win32/audio-cue-player.js` and `src/main/platform/audio-cues-win32.js` now map Windows cue playback to native `SystemSounds` instead of a no-op placeholder.
+- `.github/workflows/release-windows.yml` now owns the Windows release path and publishes the NSIS installer artifact built by `npm run build:win:release`.
 - Guarded coverage remains intentionally narrow and honest.
 - Fresh decoupling evidence lives in tracked markdown artifacts under `artifacts/windows-runtime-decoupling/`.
 - Fresh merge-back evidence for the worktree reconciliation lives under `artifacts/worktree-merge-backfill/`.
 - Permission onboarding evidence and validation notes live under `artifacts/macos-permission-onboarding/`.
 - Aliyun BYOK cloud ASR evidence lives under `artifacts/aliyun-byok-cloud-asr/`.
+- Fresh Windows platform UI contract evidence lives under `artifacts/windows-platform-ui-contract/`.
+- Unified Windows + Aliyun ASR merge evidence lives under `artifacts/merge-windows-asr-unification/`.
